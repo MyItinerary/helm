@@ -1,0 +1,49 @@
+{
+  "name": "helm",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-svg-core": "^6.7.2",
+    "@fortawesome/free-brands-svg-icons": "^6.7.2",
+    "@fortawesome/free-regular-svg-icons": "^6.7.2",
+    "@fortawesome/free-solid-svg-icons": "^6.7.2",
+    "@fortawesome/react-fontawesome": "^0.2.2",
+    "@next/third-parties": "^15.2.1",
+    "@tanstack/react-query": "^5.99.0",
+    "@vercel/analytics": "^1.5.0",
+    "axios": "^1.7.0",
+    "bootstrap": "^5.3.3",
+    "chart.js": "^4.4.8",
+    "classnames": "^2.5.1",
+    "js-cookie": "^3.0.5",
+    "next": "^14.2.24",
+    "next-nprogress-bar": "^2.4.7",
+    "react": "^18.3.1",
+    "react-bootstrap": "^2.10.9",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^18.3.1",
+    "react-paginate": "^8.3.0",
+    "react-responsive": "^10.0.1",
+    "sonner": "^1.5.0",
+    "zustand": "^5.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/js-cookie": "^3.0.6",
+    "@types/node": "^20.17.23",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.24",
+    "sass": "^1.85.1",
+    "typescript": "^5.8.2"
+  }
+}
