@@ -6,5 +6,5 @@ export const experienceService = {
 
   get: (id: string) => api.get<Experience>(`/admin/experiences/${id}`).then((r) => r.data),
 
-  updateStatus: (id: string, status: 'active' | 'draft' | 'suspended') => api.patch<Experience>(`/admin/experiences/${id}`, { status }).then((r) => r.data),
+  updateStatus: (id: string, status: 'ACTIVE' | 'INACTIVE') => api.patch<Experience>(`/admin/experiences/${id}`, { status }).then((r) => r.data),
 }

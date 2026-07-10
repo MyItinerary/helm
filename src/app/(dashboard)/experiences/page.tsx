@@ -24,7 +24,7 @@ export default function ExperiencesPage() {
   })
 
   const { mutate: toggleStatus } = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: 'active' | 'draft' | 'suspended' }) => experienceService.updateStatus(id, status),
+    mutationFn: ({ id, status }: { id: string; status: 'ACTIVE' | 'INACTIVE' }) => experienceService.updateStatus(id, status),
     onSuccess: () => {
       toast.success('Status updated')
       queryClient.invalidateQueries({ queryKey: ['experiences'] })
@@ -32,7 +32,7 @@ export default function ExperiencesPage() {
     onError: () => toast.error('Update failed'),
   })
 
-  const nextStatus = (current: string): 'active' | 'suspended' => (current === 'active' ? 'suspended' : 'active')
+  const nextStatus = (current: string): 'ACTIVE' | 'INACTIVE' => (current === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')
 
   return (
     <div>
@@ -60,9 +60,8 @@ export default function ExperiencesPage() {
                 onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
               >
                 <option value="">All statuses</option>
-                <option value="active">Active</option>
-                <option value="draft">Draft</option>
-                <option value="suspended">Suspended</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
               </Form.Select>
             </Col>
           </Row>
@@ -103,10 +102,10 @@ export default function ExperiencesPage() {
                     <td>
                       <button
                         type="button"
-                        className={`btn btn-sm ${exp.status === 'active' ? 'btn-outline-warning' : 'btn-outline-success'}`}
+                        className={`btn btn-sm ${exp.status === 'ACTIVE' ? 'btn-outline-warning' : 'btn-outline-success'}`}
                         onClick={() => toggleStatus({ id: exp.id, status: nextStatus(exp.status) })}
                       >
-                        {exp.status === 'active' ? 'Suspend' : 'Activate'}
+                        {exp.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                       </button>
                     </td>
                   </tr>

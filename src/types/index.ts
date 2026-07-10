@@ -68,7 +68,7 @@ export interface Experience {
   country?: string
   duration?: number
   price?: number
-  status: 'draft' | 'active' | 'suspended'
+  status: 'ACTIVE' | 'INACTIVE'
   guide_id: string
   guide?: Pick<Guide, 'id' | 'display_name'>
   tags?: string[]

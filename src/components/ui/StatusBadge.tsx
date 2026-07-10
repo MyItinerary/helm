@@ -2,8 +2,7 @@ import { Badge } from 'react-bootstrap'
 
 const STATUS_MAP: Record<string, { bg: string; label: string }> = {
   active: { bg: 'success', label: 'Active' },
-  draft: { bg: 'secondary', label: 'Draft' },
-  suspended: { bg: 'danger', label: 'Suspended' },
+  inactive: { bg: 'secondary', label: 'Inactive' },
   pending: { bg: 'warning', label: 'Pending' },
   confirmed: { bg: 'success', label: 'Confirmed' },
   completed: { bg: 'primary', label: 'Completed' },
@@ -20,6 +19,6 @@ const STATUS_MAP: Record<string, { bg: string; label: string }> = {
 }
 
 export default function StatusBadge({ status }: { status: string }) {
-  const { bg, label } = STATUS_MAP[status] ?? { bg: 'light', label: status }
+  const { bg, label } = STATUS_MAP[status.toLowerCase()] ?? { bg: 'light', label: status }
   return <Badge bg={bg}>{label}</Badge>
 }
