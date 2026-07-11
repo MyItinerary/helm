@@ -14,11 +14,14 @@ const STATUS_MAP: Record<string, { bg: string; label: string }> = {
   approved: { bg: 'success', label: 'Approved' },
   rejected: { bg: 'danger', label: 'Rejected' },
   unverified: { bg: 'secondary', label: 'Unverified' },
+  none: { bg: 'secondary', label: 'None' },
   basic: { bg: 'info', label: 'Basic' },
+  enhanced: { bg: 'success', label: 'Enhanced' },
   verified: { bg: 'success', label: 'Verified' },
+  not_submitted: { bg: 'secondary', label: 'Not Submitted' },
 }
 
-export default function StatusBadge({ status }: { status: string }) {
-  const { bg, label } = STATUS_MAP[status.toLowerCase()] ?? { bg: 'light', label: status }
+export default function StatusBadge({ status }: { status?: string }) {
+  const { bg, label } = STATUS_MAP[(status ?? '').toLowerCase()] ?? { bg: 'secondary', label: status ?? 'Unknown' }
   return <Badge bg={bg}>{label}</Badge>
 }

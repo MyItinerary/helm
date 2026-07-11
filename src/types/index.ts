@@ -10,13 +10,21 @@ export interface Admin {
   updated_at: string
 }
 
-export interface UserProfile {
-  id: string
-  user_id: string
-  first_name?: string
-  last_name?: string
+export interface Profile {
+  full_name?: string
   avatar_url?: string
-  location?: string
+  bio?: string
+  home_country?: string
+  preferred_currency?: string
+  preferred_language?: string
+  date_of_birth?: string
+  energy_level?: string
+  interests?: string[]
+  social_style?: string
+  budget_range?: string
+  comfort_level?: string
+  trip_intent?: string[]
+  completed?: boolean
 }
 
 export interface User {
@@ -27,6 +35,10 @@ export interface User {
   is_temp: boolean
   created_at: string
   updated_at: string
+}
+
+export interface UserDetail extends User {
+  profile?: Profile
 }
 
 export interface Guide {
@@ -41,38 +53,73 @@ export interface Guide {
   hourly_rate?: number
   currency?: string
   is_verified: boolean
-  verification_level: 'unverified' | 'basic' | 'verified'
+  verification_level: 'none' | 'basic' | 'enhanced'
   rating_avg?: number
   rating_count?: number
   created_at: string
   updated_at?: string
+  verification?: GuideVerification
 }
 
 export interface GuideVerification {
-  id: string
+  id: number
   guide_id: string
-  document_type: string
-  document_number?: string
+  id_document_type?: string
+  id_document_number?: string
   status: 'pending' | 'approved' | 'rejected'
   notes?: string
-  created_at: string
-  updated_at: string
+  submitted_at: string
+  reviewed_at?: string
+}
+
+export interface ExperienceRequirements {
+  fitness_level?: string
+  age?: string
+  accessibility?: string
+}
+
+export interface SafetyInfo {
+  riskLevel: string
+  notes: string[]
+  recommendedTimeOfDay?: string
+  mobilityAccessibility: string
+  emergencyGuidance?: string
 }
 
 export interface Experience {
   id: string
   title: string
+  headline?: string
   description?: string
-  location?: string
   city?: string
   country?: string
-  duration?: number
-  price?: number
+  latitude?: number
+  longitude?: number
+  duration_minutes?: number
+  group_size_min?: number
+  group_size_max?: number
+  price_from?: number
+  currency?: string
   status: 'ACTIVE' | 'INACTIVE'
   guide_id: string
   guide?: Pick<Guide, 'id' | 'display_name'>
-  tags?: string[]
+  interest_tags?: string[]
+  energy_level?: string
+  budget_range?: string
+  social_style?: string[]
+  comfort_level?: string
+  time_of_day?: string
+  is_featured?: boolean
+  cover_image_url?: string
+  booking_url?: string
+  what_you_will_do?: string[]
+  whats_included?: string[]
+  whats_not_included?: string[]
+  requirements?: ExperienceRequirements
+  safety_info?: SafetyInfo
+  cancellation_policy?: string
   created_at: string
+  updated_at?: string
 }
 
 export interface Booking {

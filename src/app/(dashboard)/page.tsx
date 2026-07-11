@@ -132,12 +132,12 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pending.slice(0, 5).map((v) => (
-                      <tr key={v.id}>
-                        <td>{v.guide_id}</td>
-                        <td>{v.document_type}</td>
-                        <td>{new Date(v.created_at).toLocaleDateString()}</td>
-                        <td><StatusBadge status={v.status} /></td>
+                    {pending.slice(0, 5).map((g) => (
+                      <tr key={g.id}>
+                        <td>{g.display_name || '(no name on file)'}</td>
+                        <td>{g.verification?.id_document_type ?? '—'}</td>
+                        <td>{g.verification ? new Date(g.verification.submitted_at).toLocaleDateString() : '—'}</td>
+                        <td><StatusBadge status={g.verification?.status ?? 'not_submitted'} /></td>
                       </tr>
                     ))}
                   </tbody>
