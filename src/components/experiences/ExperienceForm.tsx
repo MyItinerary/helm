@@ -1,17 +1,38 @@
 'use client'
 
 import {
-  Button, Card, CardBody, Col, Form, Row, Spinner,
+  Button, Card, CardBody, Col, Form, ListGroup, Row, Spinner,
 } from 'react-bootstrap'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { experienceService } from '@/services/experience.service'
+import { uploadService } from '@/services/upload.service'
+import { searchLocation, type GeocodeResult } from '@/lib/geocoding'
 import type { Experience } from '@/types'
+import TagPillSelect from './TagPillSelect'
 
-const INTEREST_OPTIONS = ['food', 'culture', 'nature', 'nightlife', 'art', 'wellness']
-const SOCIAL_STYLE_OPTIONS = ['solo', 'couple', 'group', 'open']
+// interest_tags is a free-form Postgres array server-side, so any ids here are safe to add.
+const INTEREST_OPTIONS = [
+  { id: 'food', label: 'Local food & drinks' },
+  { id: 'culture', label: 'Culture & history' },
+  { id: 'nature', label: 'Nature & outdoors' },
+  { id: 'nightlife', label: 'Nightlife & music' },
+  { id: 'art', label: 'Art & creativity' },
+  { id: 'wellness', label: 'Wellness & calm' },
+  { id: 'street_life', label: 'Street life' },
+  { id: 'events', label: 'Events & live shows' },
+]
+// social_style is a Postgres enum locked to these 4 values — don't add a 5th
+// option here without a backend migration. Labels mirror how the mobile
+// app's onboarding already collapses 5 UX choices down to these 4 ids.
+const SOCIAL_STYLE_OPTIONS = [
+  { id: 'solo', label: 'Solo / low-interaction' },
+  { id: 'couple', label: 'With a partner' },
+  { id: 'group', label: 'Small group (2–4 people)' },
+  { id: 'open', label: 'Big group energy' },
+]
 const ENERGY_OPTIONS = ['chill', 'balanced', 'high']
 const BUDGET_OPTIONS = ['low', 'medium', 'high']
 const COMFORT_OPTIONS = ['tourist', 'mixed', 'local']
@@ -174,9 +195,61 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
     e: React.ChangeEvent<HTMLSelectElement>,
   ) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
-  const setMulti = (field: 'interest_tags' | 'social_style') => (
-    e: React.ChangeEvent<HTMLSelectElement>,
-  ) => setForm((f) => ({ ...f, [field]: Array.from(e.target.selectedOptions, (o) => o.value) }))
+  const setMulti = (field: 'interest_tags' | 'social_style') => (next: string[]) => setForm((f) => ({ ...f, [field]: next }))
+
+  const [locationQuery, setLocationQuery] = useState('')
+  const [locationResults, setLocationResults] = useState<GeocodeResult[]>([])
+  const [showLocationResults, setShowLocationResults] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!locationQuery.trim()) {
+      setLocationResults([])
+      return undefined
+    }
+    debounceRef.current = setTimeout(() => {
+      searchLocation(locationQuery)
+        .then((results) => {
+          setLocationResults(results)
+          setShowLocationResults(true)
+        })
+        .catch(() => setLocationResults([]))
+    }, 450)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [locationQuery])
+
+  const selectLocation = (result: GeocodeResult) => {
+    setForm((f) => ({
+      ...f,
+      city: result.city ?? f.city,
+      country: result.country ?? f.country,
+      latitude: String(result.lat),
+      longitude: String(result.lon),
+    }))
+    setLocationQuery(result.label)
+    setShowLocationResults(false)
+  }
+
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingImage(true)
+    try {
+      const url = await uploadService.uploadToCloudinary(file)
+      setForm((f) => ({ ...f, cover_image_url: url }))
+      toast.success('Image uploaded')
+    } catch {
+      toast.error('Image upload failed')
+    } finally {
+      setIsUploadingImage(false)
+      e.target.value = ''
+    }
+  }
 
   return (
     <div>
@@ -207,6 +280,30 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           </Form.Group>
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Location</h6>
+          <Form.Group className="mb-3 position-relative">
+            <Form.Label>Search location</Form.Label>
+            <Form.Control
+              value={locationQuery}
+              onChange={(e) => setLocationQuery(e.target.value)}
+              onFocus={() => setShowLocationResults(locationResults.length > 0)}
+              onBlur={() => setTimeout(() => setShowLocationResults(false), 150)}
+              placeholder="Type a place to fill city, country, latitude & longitude"
+            />
+            {showLocationResults && locationResults.length > 0 && (
+              <ListGroup className="position-absolute w-100 shadow-sm" style={{ zIndex: 1000 }}>
+                {locationResults.map((result) => (
+                  <ListGroup.Item
+                    key={`${result.lat},${result.lon}`}
+                    action
+                    onMouseDown={() => selectLocation(result)}
+                  >
+                    {result.label}
+                  </ListGroup.Item>
+                ))}
+              </ListGroup>
+            )}
+            <Form.Text className="text-muted">Powered by OpenStreetMap. City/country/lat/long below stay editable if you need to correct them.</Form.Text>
+          </Form.Group>
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
@@ -277,26 +374,20 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Interest tags</Form.Label>
-                <Form.Select multiple htmlSize={4} value={form.interest_tags} onChange={setMulti('interest_tags')}>
-                  {INTEREST_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                </Form.Select>
-                <Form.Text className="text-muted">Cmd/Ctrl-click to select multiple</Form.Text>
+                <TagPillSelect options={INTEREST_OPTIONS} value={form.interest_tags} onChange={setMulti('interest_tags')} />
               </Form.Group>
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Social style</Form.Label>
-                <Form.Select multiple htmlSize={4} value={form.social_style} onChange={setMulti('social_style')}>
-                  {SOCIAL_STYLE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                </Form.Select>
-                <Form.Text className="text-muted">Cmd/Ctrl-click to select multiple</Form.Text>
+                <TagPillSelect options={SOCIAL_STYLE_OPTIONS} value={form.social_style} onChange={setMulti('social_style')} />
               </Form.Group>
             </Col>
           </Row>
           <Row>
             <Col md={4}>
               <Form.Group className="mb-3">
-                <Form.Label>Energy level</Form.Label>
+                <Form.Label>Exploration pace</Form.Label>
                 <Form.Select value={form.energy_level} onChange={setSelect('energy_level')}>
                   <option value="">Select…</option>
                   {ENERGY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -332,13 +423,14 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
                 </Form.Select>
               </Form.Group>
             </Col>
-            <Col md={6} className="d-flex align-items-center">
+            <Col md={6}>
               <Form.Check
                 type="checkbox"
                 label="Featured"
                 checked={form.is_featured}
                 onChange={(e) => setForm((f) => ({ ...f, is_featured: e.target.checked }))}
               />
+              <Form.Text className="text-muted">Shows a &quot;Featured&quot; badge in the admin list. Doesn&apos;t currently affect sort order or recommendations.</Form.Text>
             </Col>
           </Row>
 
@@ -436,14 +528,23 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Cover image URL</Form.Label>
-                <Form.Control value={form.cover_image_url} onChange={set('cover_image_url')} placeholder="https://…" />
+                <Form.Label>Cover image</Form.Label>
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  {form.cover_image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={form.cover_image_url} alt="Cover preview" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 4 }} />
+                  )}
+                  <Form.Control type="file" accept="image/*" onChange={handleImageUpload} disabled={isUploadingImage} />
+                  {isUploadingImage && <Spinner size="sm" />}
+                </div>
+                <Form.Control value={form.cover_image_url} onChange={set('cover_image_url')} placeholder="https://… (or upload a file above)" />
               </Form.Group>
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Booking URL</Form.Label>
                 <Form.Control value={form.booking_url} onChange={set('booking_url')} placeholder="https://…" />
+                <Form.Text className="text-muted">External link where travelers complete booking for this experience (e.g. Viator, GetYourGuide, or the guide&apos;s own booking page).</Form.Text>
               </Form.Group>
             </Col>
           </Row>
