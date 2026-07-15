@@ -42,6 +42,16 @@ export default async function SidebarNav() {
         Payments & Payouts
       </SidebarNavItem>
 
+      <li className="nav-title px-3 py-2 mt-3 text-uppercase fw-bold small">Admin Tools</li>
+
+      <SidebarNavItem icon={faCompass} href="/admin/social-media-import">
+        Social Imports
+      </SidebarNavItem>
+
+      <SidebarNavItem icon={faMapMarkerAlt} href="/admin/temporary-experiences">
+        Temporary Experiences
+      </SidebarNavItem>
+
       <li className="nav-title px-3 py-2 mt-3 text-uppercase fw-bold small">System</li>
 
       <SidebarNavItem icon={faGear} href="/settings">
