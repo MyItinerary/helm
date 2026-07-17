@@ -109,6 +109,12 @@ export interface Experience {
   social_style?: string[]
   comfort_level?: string
   time_of_day?: string
+  schedule_type?: 'one_off' | 'recurring'
+  event_date?: string
+  start_time?: string
+  recurrence_days?: string[]
+  recurrence_start_date?: string
+  recurrence_end_date?: string
   is_featured?: boolean
   cover_image_url?: string
   booking_url?: string
