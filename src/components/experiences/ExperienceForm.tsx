@@ -36,9 +36,24 @@ const SOCIAL_STYLE_OPTIONS = [
 const ENERGY_OPTIONS = ['chill', 'balanced', 'high']
 const BUDGET_OPTIONS = ['low', 'medium', 'high']
 const COMFORT_OPTIONS = ['tourist', 'mixed', 'local']
-const TIME_OF_DAY_OPTIONS = ['morning', 'afternoon', 'evening', 'night']
+const TIME_OF_DAY_OPTIONS = ['day', 'night']
 const RISK_LEVEL_OPTIONS = ['LOW', 'MEDIUM', 'HIGH']
 const MOBILITY_OPTIONS = ['FULL', 'LIMITED', 'UNKNOWN']
+const CURRENCY_OPTIONS = ['NGN', 'USD', 'GBP']
+const DURATION_HOUR_OPTIONS = Array.from({ length: 25 }, (_, i) => String(i))
+const DURATION_MIN_OPTIONS = ['0', '15', '30', '45']
+const WEEKDAY_OPTIONS = [
+  { id: 'mon', label: 'Mon' },
+  { id: 'tue', label: 'Tue' },
+  { id: 'wed', label: 'Wed' },
+  { id: 'thu', label: 'Thu' },
+  { id: 'fri', label: 'Fri' },
+  { id: 'sat', label: 'Sat' },
+  { id: 'sun', label: 'Sun' },
+]
+const MONTH_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => ({ id: String(i + 1), label: String(i + 1) }))
+const MAX_DESCRIPTION_WORDS = 100
+const countWords = (s: string) => (s.trim() ? s.trim().split(/\s+/).length : 0)
 
 const emptyForm = {
   title: '',
@@ -49,8 +64,9 @@ const emptyForm = {
   latitude: '',
   longitude: '',
   price_from: '',
-  currency: '',
-  duration_minutes: '',
+  currency: 'NGN',
+  duration_hours: '',
+  duration_mins: '',
   group_size_min: '',
   group_size_max: '',
   interest_tags: [] as string[],
@@ -59,6 +75,15 @@ const emptyForm = {
   social_style: [] as string[],
   comfort_level: '',
   time_of_day: '',
+  schedule_type: '',
+  event_start_date: '',
+  event_end_date: '',
+  start_time: '',
+  recurrence_type: '',
+  recurrence_days: [] as string[],
+  recurrence_month_days: [] as string[],
+  recurrence_start_date: '',
+  recurrence_end_date: '',
   is_featured: false,
   what_you_will_do: '',
   whats_included: '',
@@ -69,7 +94,6 @@ const emptyForm = {
   accessibility: '',
   risk_level: '',
   safety_notes: '',
-  recommended_time_of_day: '',
   mobility_accessibility: '',
   emergency_guidance: '',
   cover_image_url: '',
@@ -92,8 +116,9 @@ function toFormState(exp?: Partial<Experience>): FormState {
     latitude: exp.latitude != null ? String(exp.latitude) : '',
     longitude: exp.longitude != null ? String(exp.longitude) : '',
     price_from: exp.price_from != null ? String(exp.price_from) : '',
-    currency: exp.currency ?? '',
-    duration_minutes: exp.duration_minutes != null ? String(exp.duration_minutes) : '',
+    currency: exp.currency ?? 'NGN',
+    duration_hours: exp.duration_minutes != null ? String(Math.floor(exp.duration_minutes / 60)) : '',
+    duration_mins: exp.duration_minutes != null ? String(exp.duration_minutes % 60) : '',
     group_size_min: exp.group_size_min != null ? String(exp.group_size_min) : '',
     group_size_max: exp.group_size_max != null ? String(exp.group_size_max) : '',
     interest_tags: exp.interest_tags ?? [],
@@ -102,6 +127,15 @@ function toFormState(exp?: Partial<Experience>): FormState {
     social_style: exp.social_style ?? [],
     comfort_level: exp.comfort_level ?? '',
     time_of_day: exp.time_of_day ?? '',
+    schedule_type: exp.schedule_type ?? '',
+    event_start_date: exp.event_start_date ?? '',
+    event_end_date: exp.event_end_date ?? '',
+    start_time: exp.start_time ?? '',
+    recurrence_type: exp.recurrence_type ?? '',
+    recurrence_days: exp.recurrence_days ?? [],
+    recurrence_month_days: exp.recurrence_month_days?.map(String) ?? [],
+    recurrence_start_date: exp.recurrence_start_date ?? '',
+    recurrence_end_date: exp.recurrence_end_date ?? '',
     is_featured: exp.is_featured ?? false,
     what_you_will_do: joinLines(exp.what_you_will_do),
     whats_included: joinLines(exp.whats_included),
@@ -112,7 +146,6 @@ function toFormState(exp?: Partial<Experience>): FormState {
     accessibility: exp.requirements?.accessibility ?? '',
     risk_level: exp.safety_info?.riskLevel ?? '',
     safety_notes: joinLines(exp.safety_info?.notes),
-    recommended_time_of_day: exp.safety_info?.recommendedTimeOfDay ?? '',
     mobility_accessibility: exp.safety_info?.mobilityAccessibility ?? '',
     emergency_guidance: exp.safety_info?.emergencyGuidance ?? '',
     cover_image_url: exp.cover_image_url ?? '',
@@ -143,7 +176,9 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         longitude: form.longitude ? Number(form.longitude) : undefined,
         price_from: form.price_from ? Number(form.price_from) : undefined,
         currency: form.currency || undefined,
-        duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : undefined,
+        duration_minutes: (form.duration_hours || form.duration_mins)
+          ? Number(form.duration_hours || 0) * 60 + Number(form.duration_mins || 0)
+          : undefined,
         group_size_min: form.group_size_min ? Number(form.group_size_min) : undefined,
         group_size_max: form.group_size_max ? Number(form.group_size_max) : undefined,
         interest_tags: form.interest_tags.length ? form.interest_tags : undefined,
@@ -152,6 +187,17 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         social_style: form.social_style.length ? form.social_style : undefined,
         comfort_level: form.comfort_level || undefined,
         time_of_day: form.time_of_day || undefined,
+        schedule_type: form.schedule_type || undefined,
+        event_start_date: form.schedule_type === 'one_off' ? (form.event_start_date || undefined) : undefined,
+        event_end_date: form.schedule_type === 'one_off' ? (form.event_end_date || undefined) : undefined,
+        start_time: form.schedule_type ? (form.start_time || undefined) : undefined,
+        recurrence_type: form.schedule_type === 'recurring' ? (form.recurrence_type || undefined) : undefined,
+        recurrence_days: form.schedule_type === 'recurring' && form.recurrence_type === 'weekly' && form.recurrence_days.length
+          ? form.recurrence_days : undefined,
+        recurrence_month_days: form.schedule_type === 'recurring' && form.recurrence_type === 'monthly' && form.recurrence_month_days.length
+          ? form.recurrence_month_days.map(Number) : undefined,
+        recurrence_start_date: form.schedule_type === 'recurring' ? (form.recurrence_start_date || undefined) : undefined,
+        recurrence_end_date: form.schedule_type === 'recurring' ? (form.recurrence_end_date || undefined) : undefined,
         is_featured: form.is_featured,
         cover_image_url: form.cover_image_url || undefined,
         booking_url: form.booking_url || undefined,
@@ -167,7 +213,6 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         safety_info: form.risk_level ? {
           riskLevel: form.risk_level,
           notes: lines(form.safety_notes),
-          recommendedTimeOfDay: form.recommended_time_of_day || undefined,
           mobilityAccessibility: form.mobility_accessibility || 'UNKNOWN',
           emergencyGuidance: form.emergency_guidance || undefined,
         } : undefined,
@@ -191,11 +236,17 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
+  const setDescription = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const { value } = e.target
+    if (countWords(value) > MAX_DESCRIPTION_WORDS) return
+    setForm((f) => ({ ...f, description: value }))
+  }
+
   const setSelect = (field: keyof FormState) => (
     e: React.ChangeEvent<HTMLSelectElement>,
   ) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
-  const setMulti = (field: 'interest_tags' | 'social_style') => (next: string[]) => setForm((f) => ({ ...f, [field]: next }))
+  const setMulti = (field: 'interest_tags' | 'social_style' | 'recurrence_days' | 'recurrence_month_days') => (next: string[]) => setForm((f) => ({ ...f, [field]: next }))
 
   const [locationQuery, setLocationQuery] = useState('')
   const [locationResults, setLocationResults] = useState<GeocodeResult[]>([])
@@ -269,14 +320,18 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Headline</Form.Label>
-                <Form.Control value={form.headline} onChange={set('headline')} placeholder="A short catchy subtitle" />
+                <Form.Label>Category</Form.Label>
+                <Form.Select value={form.headline} onChange={setSelect('headline')}>
+                  <option value="">Select…</option>
+                  {INTEREST_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </Form.Select>
               </Form.Group>
             </Col>
           </Row>
           <Form.Group className="mb-3">
             <Form.Label>Description</Form.Label>
-            <Form.Control as="textarea" rows={3} value={form.description} onChange={set('description')} />
+            <Form.Control as="textarea" rows={3} value={form.description} onChange={setDescription} />
+            <Form.Text className="text-muted">{countWords(form.description)}/{MAX_DESCRIPTION_WORDS} words</Form.Text>
           </Form.Group>
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Location</h6>
@@ -344,13 +399,24 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>Currency</Form.Label>
-                <Form.Control value={form.currency} onChange={set('currency')} placeholder="USD" />
+                <Form.Select value={form.currency} onChange={setSelect('currency')}>
+                  {CURRENCY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </Form.Select>
               </Form.Group>
             </Col>
             <Col md={4}>
               <Form.Group className="mb-3">
-                <Form.Label>Duration (min)</Form.Label>
-                <Form.Control type="number" min={1} value={form.duration_minutes} onChange={set('duration_minutes')} />
+                <Form.Label>Duration</Form.Label>
+                <div className="d-flex gap-2">
+                  <Form.Select value={form.duration_hours} onChange={setSelect('duration_hours')}>
+                    <option value="">Hrs</option>
+                    {DURATION_HOUR_OPTIONS.map((o) => <option key={o} value={o}>{o}h</option>)}
+                  </Form.Select>
+                  <Form.Select value={form.duration_mins} onChange={setSelect('duration_mins')}>
+                    <option value="">Mins</option>
+                    {DURATION_MIN_OPTIONS.map((o) => <option key={o} value={o}>{o}m</option>)}
+                  </Form.Select>
+                </div>
               </Form.Group>
             </Col>
           </Row>
@@ -368,6 +434,96 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
               </Form.Group>
             </Col>
           </Row>
+
+          <h6 className="text-uppercase text-muted small mb-3 mt-4">Schedule</h6>
+          <Row>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Schedule type</Form.Label>
+                <Form.Select value={form.schedule_type} onChange={setSelect('schedule_type')}>
+                  <option value="">Not scheduled (bookable anytime)</option>
+                  <option value="one_off">One-off event</option>
+                  <option value="recurring">Recurring</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            {form.schedule_type === 'one_off' && (
+              <>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Start date</Form.Label>
+                    <Form.Control type="date" value={form.event_start_date} onChange={set('event_start_date')} />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>End date (optional)</Form.Label>
+                    <Form.Control type="date" value={form.event_end_date} onChange={set('event_end_date')} />
+                    <Form.Text className="text-muted">Leave blank for a single-day event.</Form.Text>
+                  </Form.Group>
+                </Col>
+              </>
+            )}
+            {form.schedule_type === 'recurring' && (
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Recurrence type</Form.Label>
+                  <Form.Select value={form.recurrence_type} onChange={setSelect('recurrence_type')}>
+                    <option value="">Select…</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            )}
+          </Row>
+          {(form.schedule_type === 'one_off' || form.schedule_type === 'recurring') && (
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Start time</Form.Label>
+                  <Form.Control type="time" value={form.start_time} onChange={set('start_time')} />
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
+          {form.schedule_type === 'recurring' && form.recurrence_type === 'weekly' && (
+            <Row>
+              <Col md={12}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Runs on</Form.Label>
+                  <TagPillSelect options={WEEKDAY_OPTIONS} value={form.recurrence_days} onChange={setMulti('recurrence_days')} />
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
+          {form.schedule_type === 'recurring' && form.recurrence_type === 'monthly' && (
+            <Row>
+              <Col md={12}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Days of the month</Form.Label>
+                  <TagPillSelect options={MONTH_DAY_OPTIONS} value={form.recurrence_month_days} onChange={setMulti('recurrence_month_days')} />
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
+          {form.schedule_type === 'recurring' && (
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Runs from</Form.Label>
+                  <Form.Control type="date" value={form.recurrence_start_date} onChange={set('recurrence_start_date')} />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Runs until (optional)</Form.Label>
+                  <Form.Control type="date" value={form.recurrence_end_date} onChange={set('recurrence_end_date')} />
+                  <Form.Text className="text-muted">Leave blank for an ongoing recurrence until manually stopped.</Form.Text>
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Experience Tags</h6>
           <Row>
@@ -438,7 +594,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           <Row>
             <Col md={4}>
               <Form.Group className="mb-3">
-                <Form.Label>What you&apos;ll do</Form.Label>
+                <Form.Label>What you&apos;ll do (optional)</Form.Label>
                 <Form.Control as="textarea" rows={3} value={form.what_you_will_do} onChange={set('what_you_will_do')} placeholder="One item per line" />
               </Form.Group>
             </Col>
@@ -484,7 +640,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Safety Info (optional)</h6>
           <Row>
-            <Col md={4}>
+            <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Risk level</Form.Label>
                 <Form.Select value={form.risk_level} onChange={setSelect('risk_level')}>
@@ -493,19 +649,13 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
                 </Form.Select>
               </Form.Group>
             </Col>
-            <Col md={4}>
+            <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Mobility accessibility</Form.Label>
                 <Form.Select value={form.mobility_accessibility} onChange={setSelect('mobility_accessibility')}>
                   <option value="">UNKNOWN</option>
                   {MOBILITY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                 </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Recommended time of day</Form.Label>
-                <Form.Control value={form.recommended_time_of_day} onChange={set('recommended_time_of_day')} />
               </Form.Group>
             </Col>
           </Row>
