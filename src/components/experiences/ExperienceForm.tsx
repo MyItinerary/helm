@@ -51,6 +51,7 @@ const WEEKDAY_OPTIONS = [
   { id: 'sat', label: 'Sat' },
   { id: 'sun', label: 'Sun' },
 ]
+const MONTH_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => ({ id: String(i + 1), label: String(i + 1) }))
 const MAX_DESCRIPTION_WORDS = 100
 const countWords = (s: string) => (s.trim() ? s.trim().split(/\s+/).length : 0)
 
@@ -75,9 +76,12 @@ const emptyForm = {
   comfort_level: '',
   time_of_day: '',
   schedule_type: '',
-  event_date: '',
+  event_start_date: '',
+  event_end_date: '',
   start_time: '',
+  recurrence_type: '',
   recurrence_days: [] as string[],
+  recurrence_month_days: [] as string[],
   recurrence_start_date: '',
   recurrence_end_date: '',
   is_featured: false,
@@ -124,9 +128,12 @@ function toFormState(exp?: Partial<Experience>): FormState {
     comfort_level: exp.comfort_level ?? '',
     time_of_day: exp.time_of_day ?? '',
     schedule_type: exp.schedule_type ?? '',
-    event_date: exp.event_date ?? '',
+    event_start_date: exp.event_start_date ?? '',
+    event_end_date: exp.event_end_date ?? '',
     start_time: exp.start_time ?? '',
+    recurrence_type: exp.recurrence_type ?? '',
     recurrence_days: exp.recurrence_days ?? [],
+    recurrence_month_days: exp.recurrence_month_days?.map(String) ?? [],
     recurrence_start_date: exp.recurrence_start_date ?? '',
     recurrence_end_date: exp.recurrence_end_date ?? '',
     is_featured: exp.is_featured ?? false,
@@ -181,9 +188,14 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         comfort_level: form.comfort_level || undefined,
         time_of_day: form.time_of_day || undefined,
         schedule_type: form.schedule_type || undefined,
-        event_date: form.schedule_type === 'one_off' ? (form.event_date || undefined) : undefined,
+        event_start_date: form.schedule_type === 'one_off' ? (form.event_start_date || undefined) : undefined,
+        event_end_date: form.schedule_type === 'one_off' ? (form.event_end_date || undefined) : undefined,
         start_time: form.schedule_type ? (form.start_time || undefined) : undefined,
-        recurrence_days: form.schedule_type === 'recurring' && form.recurrence_days.length ? form.recurrence_days : undefined,
+        recurrence_type: form.schedule_type === 'recurring' ? (form.recurrence_type || undefined) : undefined,
+        recurrence_days: form.schedule_type === 'recurring' && form.recurrence_type === 'weekly' && form.recurrence_days.length
+          ? form.recurrence_days : undefined,
+        recurrence_month_days: form.schedule_type === 'recurring' && form.recurrence_type === 'monthly' && form.recurrence_month_days.length
+          ? form.recurrence_month_days.map(Number) : undefined,
         recurrence_start_date: form.schedule_type === 'recurring' ? (form.recurrence_start_date || undefined) : undefined,
         recurrence_end_date: form.schedule_type === 'recurring' ? (form.recurrence_end_date || undefined) : undefined,
         is_featured: form.is_featured,
@@ -234,7 +246,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
     e: React.ChangeEvent<HTMLSelectElement>,
   ) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
-  const setMulti = (field: 'interest_tags' | 'social_style' | 'recurrence_days') => (next: string[]) => setForm((f) => ({ ...f, [field]: next }))
+  const setMulti = (field: 'interest_tags' | 'social_style' | 'recurrence_days' | 'recurrence_month_days') => (next: string[]) => setForm((f) => ({ ...f, [field]: next }))
 
   const [locationQuery, setLocationQuery] = useState('')
   const [locationResults, setLocationResults] = useState<GeocodeResult[]>([])
@@ -439,14 +451,15 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
               <>
                 <Col md={4}>
                   <Form.Group className="mb-3">
-                    <Form.Label>Event date</Form.Label>
-                    <Form.Control type="date" value={form.event_date} onChange={set('event_date')} />
+                    <Form.Label>Start date</Form.Label>
+                    <Form.Control type="date" value={form.event_start_date} onChange={set('event_start_date')} />
                   </Form.Group>
                 </Col>
                 <Col md={4}>
                   <Form.Group className="mb-3">
-                    <Form.Label>Start time</Form.Label>
-                    <Form.Control type="time" value={form.start_time} onChange={set('start_time')} />
+                    <Form.Label>End date (optional)</Form.Label>
+                    <Form.Control type="date" value={form.event_end_date} onChange={set('event_end_date')} />
+                    <Form.Text className="text-muted">Leave blank for a single-day event.</Form.Text>
                   </Form.Group>
                 </Col>
               </>
@@ -454,30 +467,59 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             {form.schedule_type === 'recurring' && (
               <Col md={4}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Start time</Form.Label>
-                  <Form.Control type="time" value={form.start_time} onChange={set('start_time')} />
+                  <Form.Label>Recurrence type</Form.Label>
+                  <Form.Select value={form.recurrence_type} onChange={setSelect('recurrence_type')}>
+                    <option value="">Select…</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </Form.Select>
                 </Form.Group>
               </Col>
             )}
           </Row>
-          {form.schedule_type === 'recurring' && (
+          {(form.schedule_type === 'one_off' || form.schedule_type === 'recurring') && (
             <Row>
-              <Col md={6}>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Start time</Form.Label>
+                  <Form.Control type="time" value={form.start_time} onChange={set('start_time')} />
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
+          {form.schedule_type === 'recurring' && form.recurrence_type === 'weekly' && (
+            <Row>
+              <Col md={12}>
                 <Form.Group className="mb-3">
                   <Form.Label>Runs on</Form.Label>
                   <TagPillSelect options={WEEKDAY_OPTIONS} value={form.recurrence_days} onChange={setMulti('recurrence_days')} />
                 </Form.Group>
               </Col>
-              <Col md={3}>
+            </Row>
+          )}
+          {form.schedule_type === 'recurring' && form.recurrence_type === 'monthly' && (
+            <Row>
+              <Col md={12}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Runs from (optional)</Form.Label>
+                  <Form.Label>Days of the month</Form.Label>
+                  <TagPillSelect options={MONTH_DAY_OPTIONS} value={form.recurrence_month_days} onChange={setMulti('recurrence_month_days')} />
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
+          {form.schedule_type === 'recurring' && (
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Runs from</Form.Label>
                   <Form.Control type="date" value={form.recurrence_start_date} onChange={set('recurrence_start_date')} />
                 </Form.Group>
               </Col>
-              <Col md={3}>
+              <Col md={4}>
                 <Form.Group className="mb-3">
                   <Form.Label>Runs until (optional)</Form.Label>
                   <Form.Control type="date" value={form.recurrence_end_date} onChange={set('recurrence_end_date')} />
+                  <Form.Text className="text-muted">Leave blank for an ongoing recurrence until manually stopped.</Form.Text>
                 </Form.Group>
               </Col>
             </Row>

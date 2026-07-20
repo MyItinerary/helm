@@ -110,9 +110,12 @@ export interface Experience {
   comfort_level?: string
   time_of_day?: string
   schedule_type?: 'one_off' | 'recurring'
-  event_date?: string
+  event_start_date?: string
+  event_end_date?: string
   start_time?: string
+  recurrence_type?: 'weekly' | 'monthly'
   recurrence_days?: string[]
+  recurrence_month_days?: number[]
   recurrence_start_date?: string
   recurrence_end_date?: string
   is_featured?: boolean
