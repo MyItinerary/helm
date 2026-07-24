@@ -8,7 +8,7 @@ import { TemporaryExperience, GeneratedExperienceJson } from '@/types'
 
 interface Props {
   experience: TemporaryExperience
-  onSave: (data: { generated_experience_json: GeneratedExperienceJson }) => void
+  onSave: (data: { generated_experience_json: GeneratedExperienceJson; media_url?: string | null }) => void
   onApprove: () => void
   onReject: () => void
   isSaving: boolean
@@ -20,6 +20,7 @@ export default function TemporaryExperienceForm({
   experience, onSave, onApprove, onReject, isSaving, isApproving, isRejecting,
 }: Props) {
   const [formData, setFormData] = useState<GeneratedExperienceJson>(experience.generated_experience_json)
+  const [mediaUrl, setMediaUrl] = useState(experience.media_url ?? '')
 
   const handleChange = (path: string, value: any) => {
     setFormData((prev) => {
@@ -41,7 +42,7 @@ export default function TemporaryExperienceForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSave({ generated_experience_json: formData })
+    onSave({ generated_experience_json: formData, media_url: mediaUrl })
   }
 
   return (
@@ -210,6 +211,19 @@ export default function TemporaryExperienceForm({
       </Card>
 
       <Card className="mb-4">
+        <Card.Header>Media & Links</Card.Header>
+        <Card.Body>
+          <Form.Group className="mb-3">
+            <Form.Label>Media URL</Form.Label>
+            <Form.Control
+              value={mediaUrl}
+              onChange={(e) => setMediaUrl(e.target.value)}
+            />
+          </Form.Group>
+        </Card.Body>
+      </Card>
+
+      <Card className="mb-4">
         <Card.Header>Experience Attributes</Card.Header>
         <Card.Body>
           <Row>
@@ -281,7 +295,7 @@ export default function TemporaryExperienceForm({
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>What's Included (comma separated)</Form.Label>
+                <Form.Label>What&apos;s Included (comma separated)</Form.Label>
                 <Form.Control
                   as="textarea"
                   value={formData.whats_included?.join('\n') ?? ''}
@@ -291,7 +305,7 @@ export default function TemporaryExperienceForm({
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>What's Not Included (comma separated)</Form.Label>
+                <Form.Label>What&apos;s Not Included (comma separated)</Form.Label>
                 <Form.Control
                   as="textarea"
                   value={formData.whats_not_included?.join('\n') ?? ''}

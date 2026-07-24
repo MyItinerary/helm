@@ -16,7 +16,7 @@ export const temporaryExperiencesService = {
   get: (id: string) =>
     api.get<TemporaryExperience>(`/admin/temporary-experiences/${id}`).then((r) => r.data),
 
-  update: (id: string, data: { generated_experience_json: GeneratedExperienceJson }) =>
+  update: (id: string, data: { generated_experience_json: GeneratedExperienceJson; media_url?: string | null }) =>
     api.patch<TemporaryExperience>(`/admin/temporary-experiences/${id}`, data).then((r) => r.data),
 
   approve: (id: string) =>
