@@ -174,6 +174,76 @@ export interface PaginatedResponse<T> {
   limit: number
 }
 
+export type SocialMediaPlatform = "reddit" | "twitter" | "instagram" | "facebook";
+
+export type TemporaryExperienceStatus = "pending" | "approved" | "rejected";
+
+export type GeneratedExperienceJson = {
+  title?: string;
+  headline?: string;
+  description?: string;
+  city?: string;
+  country?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  duration_minutes?: number | null;
+  price_from?: number | null;
+  currency?: string;
+  interest_tags?: string[];
+  energy_level?: "chill" | "balanced" | "high" | string;
+  budget_range?: "low" | "medium" | "high" | string;
+  social_style?: string[];
+  comfort_level?: "tourist" | "mixed" | "local" | string;
+  time_of_day?: "morning" | "afternoon" | "evening" | "night" | string;
+  what_you_will_do?: string[];
+  whats_included?: string[];
+  whats_not_included?: string[];
+  requirements?: {
+    fitness?: string;
+    age?: string;
+    accessibility?: string;
+    [key: string]: unknown;
+  };
+  safety_info?: {
+    riskLevel?: string;
+    notes?: string[];
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+export type TemporaryExperience = {
+  id: string;
+  generated_experience_json: GeneratedExperienceJson;
+  social_media: SocialMediaPlatform | string;
+  social_media_text: string;
+  social_media_url?: string | null;
+  social_media_post_id?: string | null;
+  social_media_author?: string | null;
+  media_url?: string | null;
+  status: TemporaryExperienceStatus | string;
+  experience_id?: string | null;
+  reviewed_by_admin_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  reviewed_at?: string | null;
+};
+
+export type SocialMediaImportRequest = {
+  platforms: SocialMediaPlatform[];
+  keywords: string[];
+  days: number;
+};
+
+export type SocialMediaImportResponse = {
+  total_found: number;
+  total_analyzed: number;
+  temporary_experiences_created: number;
+  duplicates_skipped: number;
+  skipped: number;
+  errors: string[];
+};
+
 export interface LoginResponse {
   access_token: string
   token_type: string
