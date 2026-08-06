@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Button,
   Card,
@@ -9,38 +9,85 @@ import {
   Row,
   Spinner,
   Alert,
+  ProgressBar,
 } from 'react-bootstrap'
-import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { temporaryExperiencesService } from '@/services/temporaryExperiences.service'
-import { SocialMediaPlatform, SocialMediaImportResponse } from '@/types'
+import { SocialMediaPlatform, SocialMediaImportResponse, ImportProgressEvent } from '@/types'
 import Link from 'next/link'
+
+function formatEvent(event: ImportProgressEvent): string {
+  switch (event.type) {
+    case 'start':
+      return `Starting import: ${event.platforms.join(', ')} (last ${event.days}d, provider=${event.provider})`
+    case 'phase':
+      if (event.phase === 'searching') return `Searching ${event.platform}...`
+      if (event.phase === 'searched') return `Found ${event.found} post(s) on ${event.platform}`
+      return `Analyzing ${event.total} post(s)...`
+    case 'platform_error':
+      return `⚠ ${event.platform} search failed: ${event.message}`
+    case 'item':
+      return `[${event.current}/${event.total}] ${event.platform} ${event.post_id} — ${event.outcome}`
+    case 'fatal':
+      return `✖ Fatal: ${event.message}`
+    case 'done':
+      return 'Import complete.'
+    default:
+      return ''
+  }
+}
 
 export default function SocialMediaImportPage() {
   const [platforms, setPlatforms] = useState<SocialMediaPlatform[]>(['reddit'])
   const [keywords, setKeywords] = useState<string>('tourist spots, hidden gems')
   const [days, setDays] = useState<number>(7)
+  const [events, setEvents] = useState<ImportProgressEvent[]>([])
+  const [isRunning, setIsRunning] = useState(false)
   const [result, setResult] = useState<SocialMediaImportResponse | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const logRef = useRef<HTMLDivElement>(null)
 
-  const { mutate: runImport, isPending } = useMutation({
-    mutationFn: temporaryExperiencesService.import,
-    onSuccess: (data) => {
-      setResult(data)
-      toast.success('Import completed successfully.')
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to run import.')
-    },
-  })
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
+  }, [events.length])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const lastItemEvent = [...events].reverse().find((e) => e.type === 'item') as
+    | Extract<ImportProgressEvent, { type: 'item' }>
+    | undefined
+  const analyzingPhase = events.find((e) => e.type === 'phase' && e.phase === 'analyzing') as
+    | Extract<ImportProgressEvent, { type: 'phase'; phase: 'analyzing' }>
+    | undefined
+  const progressTotal = lastItemEvent?.total ?? analyzingPhase?.total ?? 0
+  const progressCurrent = lastItemEvent?.current ?? 0
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    runImport({
-      platforms,
-      keywords: keywords.split(',').map((k) => k.trim()),
-      days,
-    })
+    setEvents([])
+    setResult(null)
+    setIsRunning(true)
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    try {
+      await temporaryExperiencesService.importStream(
+        { platforms, keywords: keywords.split(',').map((k) => k.trim()), days },
+        (event) => {
+          setEvents((prev) => [...prev, event])
+          if (event.type === 'done') setResult(event.summary)
+        },
+        controller.signal,
+      )
+      toast.success('Import completed successfully.')
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        toast.error((err as Error).message || 'Failed to run import.')
+      }
+    } finally {
+      setIsRunning(false)
+      abortControllerRef.current = null
+    }
   }
+
+  const handleCancel = () => abortControllerRef.current?.abort()
 
   const togglePlatform = (platform: SocialMediaPlatform) => {
     setPlatforms((prev) =>
@@ -66,7 +113,7 @@ export default function SocialMediaImportPage() {
                       label={platform.charAt(0).toUpperCase() + platform.slice(1)}
                       checked={platforms.includes(platform)}
                       onChange={() => togglePlatform(platform)}
-                      disabled={isPending}
+                      disabled={isRunning}
                     />
                   )
                 )}
@@ -79,7 +126,7 @@ export default function SocialMediaImportPage() {
                 type="text"
                 value={keywords}
                 onChange={(e) => setKeywords(e.target.value)}
-                disabled={isPending}
+                disabled={isRunning}
                 placeholder="e.g. tourist spots, hidden gems"
               />
             </Form.Group>
@@ -91,23 +138,57 @@ export default function SocialMediaImportPage() {
                 min={1}
                 value={days}
                 onChange={(e) => setDays(Number(e.target.value))}
-                disabled={isPending}
+                disabled={isRunning}
               />
             </Form.Group>
 
-            <Button type="submit" disabled={isPending || platforms.length === 0}>
-              {isPending ? (
-                <>
-                  <Spinner size="sm" className="me-2" />
-                  Importing...
-                </>
-              ) : (
-                'Run Import'
+            <div className="d-flex gap-2">
+              <Button type="submit" disabled={isRunning || platforms.length === 0}>
+                {isRunning ? (
+                  <>
+                    <Spinner size="sm" className="me-2" />
+                    Importing...
+                  </>
+                ) : (
+                  'Run Import'
+                )}
+              </Button>
+              {isRunning && (
+                <Button type="button" variant="outline-danger" onClick={handleCancel}>
+                  Cancel
+                </Button>
               )}
-            </Button>
+            </div>
           </Form>
         </Card.Body>
       </Card>
+
+      {events.length > 0 && (
+        <Card className="mb-4">
+          <Card.Header>Progress</Card.Header>
+          <Card.Body>
+            {progressTotal > 0 && (
+              <ProgressBar
+                className="mb-3"
+                now={progressCurrent}
+                max={progressTotal}
+                label={`${progressCurrent} / ${progressTotal}`}
+                animated={isRunning}
+              />
+            )}
+            <div
+              ref={logRef}
+              className="font-monospace small border rounded p-2 bg-light"
+              style={{ maxHeight: 300, overflowY: 'auto' }}
+            >
+              {events.map((event, i) => (
+                // eslint-disable-next-line react/no-array-index-key
+                <div key={i}>{formatEvent(event)}</div>
+              ))}
+            </div>
+          </Card.Body>
+        </Card>
+      )}
 
       {result && (
         <Card className="mb-4">
