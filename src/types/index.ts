@@ -250,6 +250,26 @@ export type SocialMediaImportResponse = {
   errors: string[];
 };
 
+// One line of the NDJSON stream returned by POST /admin/social-media/import — see
+// itin/app/core/services/social_media.py::SocialMediaImportSvc.run_import.
+export type ImportProgressEvent =
+  | { type: 'start'; platforms: SocialMediaPlatform[]; keywords: string[]; days: number; provider: string }
+  | { type: 'phase'; phase: 'searching'; platform: string }
+  | { type: 'phase'; phase: 'searched'; platform: string; found: number }
+  | { type: 'phase'; phase: 'analyzing'; total: number }
+  | { type: 'platform_error'; platform: string; message: string }
+  | {
+      type: 'item';
+      current: number;
+      total: number;
+      platform: string;
+      post_id: string;
+      outcome: 'created' | 'duplicate' | 'error' | 'no_result';
+      message: string;
+    }
+  | { type: 'fatal'; message: string }
+  | { type: 'done'; summary: SocialMediaImportResponse };
+
 export interface LoginResponse {
   access_token: string
   token_type: string
