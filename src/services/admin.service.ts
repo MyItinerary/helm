@@ -15,4 +15,7 @@ export const adminService = {
   deleteAdmin: (id: string) => api.delete(`/admin/admins/${id}`),
 
   resendInvite: (email: string) => api.get(`/admin/admins/${email}/resend-invite`),
+
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    api.post('/admin/me/change-password', data).then((r) => r.data),
 }
