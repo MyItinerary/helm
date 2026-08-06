@@ -113,11 +113,17 @@ export interface Experience {
   event_start_date?: string
   event_end_date?: string
   start_time?: string
-  recurrence_type?: 'weekly' | 'monthly'
+  recurrence_type?: 'daily' | 'weekly' | 'monthly' | 'yearly'
+  recurrence_interval?: number
   recurrence_days?: string[]
+  recurrence_month_mode?: 'day_of_month' | 'day_of_week'
   recurrence_month_days?: number[]
+  recurrence_week_of_month?: number
+  recurrence_weekday?: string
   recurrence_start_date?: string
+  recurrence_end_type?: 'never' | 'on_date' | 'after_occurrences'
   recurrence_end_date?: string
+  recurrence_count?: number
   is_featured?: boolean
   cover_image_url?: string
   booking_url?: string
