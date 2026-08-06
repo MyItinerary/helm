@@ -11,7 +11,9 @@ import { experienceService } from '@/services/experience.service'
 import { uploadService } from '@/services/upload.service'
 import { searchLocation, type GeocodeResult } from '@/lib/geocoding'
 import type { Experience } from '@/types'
+import { formatRecurrenceSummary, type RecurrenceSummaryInput } from '@/utils/recurrence'
 import TagPillSelect from './TagPillSelect'
+import CustomRecurrenceModal, { type RecurrenceFields } from './CustomRecurrenceModal'
 
 // interest_tags is a free-form Postgres array server-side, so any ids here are safe to add.
 const INTEREST_OPTIONS = [
@@ -42,16 +44,6 @@ const MOBILITY_OPTIONS = ['FULL', 'LIMITED', 'UNKNOWN']
 const CURRENCY_OPTIONS = ['NGN', 'USD', 'GBP']
 const DURATION_HOUR_OPTIONS = Array.from({ length: 25 }, (_, i) => String(i))
 const DURATION_MIN_OPTIONS = ['0', '15', '30', '45']
-const WEEKDAY_OPTIONS = [
-  { id: 'mon', label: 'Mon' },
-  { id: 'tue', label: 'Tue' },
-  { id: 'wed', label: 'Wed' },
-  { id: 'thu', label: 'Thu' },
-  { id: 'fri', label: 'Fri' },
-  { id: 'sat', label: 'Sat' },
-  { id: 'sun', label: 'Sun' },
-]
-const MONTH_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => ({ id: String(i + 1), label: String(i + 1) }))
 const MAX_DESCRIPTION_WORDS = 100
 const countWords = (s: string) => (s.trim() ? s.trim().split(/\s+/).length : 0)
 
@@ -80,10 +72,16 @@ const emptyForm = {
   event_end_date: '',
   start_time: '',
   recurrence_type: '',
+  recurrence_interval: '1',
   recurrence_days: [] as string[],
+  recurrence_month_mode: '',
   recurrence_month_days: [] as string[],
+  recurrence_week_of_month: '',
+  recurrence_weekday: '',
   recurrence_start_date: '',
+  recurrence_end_type: 'never',
   recurrence_end_date: '',
+  recurrence_count: '',
   is_featured: false,
   what_you_will_do: '',
   whats_included: '',
@@ -132,10 +130,22 @@ function toFormState(exp?: Partial<Experience>): FormState {
     event_end_date: exp.event_end_date ?? '',
     start_time: exp.start_time ?? '',
     recurrence_type: exp.recurrence_type ?? '',
+    // Legacy rows predate recurrence_interval — a bare weekly/monthly row always meant
+    // "every 1"; and predate recurrence_month_mode — the only mode that existed before
+    // was day-of-month, so infer it (not '') or editing an old monthly experience would
+    // silently drop its recurrence_month_days in the new UI.
+    recurrence_interval: exp.recurrence_interval != null ? String(exp.recurrence_interval) : '1',
     recurrence_days: exp.recurrence_days ?? [],
+    recurrence_month_mode: exp.recurrence_month_mode
+      ?? (exp.recurrence_month_days?.length ? 'day_of_month' : ''),
     recurrence_month_days: exp.recurrence_month_days?.map(String) ?? [],
+    recurrence_week_of_month: exp.recurrence_week_of_month != null ? String(exp.recurrence_week_of_month) : '',
+    recurrence_weekday: exp.recurrence_weekday ?? '',
     recurrence_start_date: exp.recurrence_start_date ?? '',
+    recurrence_end_type: exp.recurrence_end_type
+      ?? (exp.recurrence_end_date ? 'on_date' : (exp.recurrence_count ? 'after_occurrences' : 'never')),
     recurrence_end_date: exp.recurrence_end_date ?? '',
+    recurrence_count: exp.recurrence_count != null ? String(exp.recurrence_count) : '',
     is_featured: exp.is_featured ?? false,
     what_you_will_do: joinLines(exp.what_you_will_do),
     whats_included: joinLines(exp.whats_included),
@@ -150,6 +160,24 @@ function toFormState(exp?: Partial<Experience>): FormState {
     emergency_guidance: exp.safety_info?.emergencyGuidance ?? '',
     cover_image_url: exp.cover_image_url ?? '',
     booking_url: exp.booking_url ?? '',
+  }
+}
+
+// FormState keeps every field as a string/string[] (matching the plain HTML inputs); this
+// adapts the recurrence slice into the numeric shape formatRecurrenceSummary expects.
+function recurrenceFieldsForSummary(form: FormState): RecurrenceSummaryInput {
+  return {
+    recurrence_type: (form.recurrence_type || undefined) as RecurrenceSummaryInput['recurrence_type'],
+    recurrence_interval: form.recurrence_interval ? Number(form.recurrence_interval) : undefined,
+    recurrence_days: form.recurrence_days,
+    recurrence_month_mode: (form.recurrence_month_mode || undefined) as RecurrenceSummaryInput['recurrence_month_mode'],
+    recurrence_month_days: form.recurrence_month_days.map(Number),
+    recurrence_week_of_month: form.recurrence_week_of_month ? Number(form.recurrence_week_of_month) : undefined,
+    recurrence_weekday: form.recurrence_weekday || undefined,
+    recurrence_start_date: form.recurrence_start_date || undefined,
+    recurrence_end_type: (form.recurrence_end_type || undefined) as RecurrenceSummaryInput['recurrence_end_type'],
+    recurrence_end_date: form.recurrence_end_date || undefined,
+    recurrence_count: form.recurrence_count ? Number(form.recurrence_count) : undefined,
   }
 }
 
@@ -192,12 +220,27 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         event_end_date: form.schedule_type === 'one_off' ? (form.event_end_date || undefined) : undefined,
         start_time: form.schedule_type ? (form.start_time || undefined) : undefined,
         recurrence_type: form.schedule_type === 'recurring' ? (form.recurrence_type || undefined) : undefined,
+        recurrence_interval: form.schedule_type === 'recurring' && form.recurrence_interval
+          ? Number(form.recurrence_interval) : undefined,
         recurrence_days: form.schedule_type === 'recurring' && form.recurrence_type === 'weekly' && form.recurrence_days.length
           ? form.recurrence_days : undefined,
-        recurrence_month_days: form.schedule_type === 'recurring' && form.recurrence_type === 'monthly' && form.recurrence_month_days.length
+        recurrence_month_mode: form.schedule_type === 'recurring' && form.recurrence_type === 'monthly'
+          ? (form.recurrence_month_mode || undefined) : undefined,
+        recurrence_month_days: form.schedule_type === 'recurring' && form.recurrence_type === 'monthly'
+          && form.recurrence_month_mode === 'day_of_month' && form.recurrence_month_days.length
           ? form.recurrence_month_days.map(Number) : undefined,
+        recurrence_week_of_month: form.schedule_type === 'recurring' && form.recurrence_type === 'monthly'
+          && form.recurrence_month_mode === 'day_of_week' && form.recurrence_week_of_month
+          ? Number(form.recurrence_week_of_month) : undefined,
+        recurrence_weekday: form.schedule_type === 'recurring' && form.recurrence_type === 'monthly'
+          && form.recurrence_month_mode === 'day_of_week'
+          ? (form.recurrence_weekday || undefined) : undefined,
         recurrence_start_date: form.schedule_type === 'recurring' ? (form.recurrence_start_date || undefined) : undefined,
-        recurrence_end_date: form.schedule_type === 'recurring' ? (form.recurrence_end_date || undefined) : undefined,
+        recurrence_end_type: form.schedule_type === 'recurring' ? (form.recurrence_end_type || undefined) : undefined,
+        recurrence_end_date: form.schedule_type === 'recurring' && form.recurrence_end_type === 'on_date'
+          ? (form.recurrence_end_date || undefined) : undefined,
+        recurrence_count: form.schedule_type === 'recurring' && form.recurrence_end_type === 'after_occurrences' && form.recurrence_count
+          ? Number(form.recurrence_count) : undefined,
         is_featured: form.is_featured,
         cover_image_url: form.cover_image_url || undefined,
         booking_url: form.booking_url || undefined,
@@ -246,7 +289,22 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
     e: React.ChangeEvent<HTMLSelectElement>,
   ) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
-  const setMulti = (field: 'interest_tags' | 'social_style' | 'recurrence_days' | 'recurrence_month_days') => (next: string[]) => setForm((f) => ({ ...f, [field]: next }))
+  const setMulti = (field: 'interest_tags' | 'social_style') => (next: string[]) => setForm((f) => ({ ...f, [field]: next }))
+
+  const [showRecurrenceModal, setShowRecurrenceModal] = useState(false)
+  const recurrenceFields: RecurrenceFields = {
+    recurrence_type: form.recurrence_type,
+    recurrence_interval: form.recurrence_interval,
+    recurrence_days: form.recurrence_days,
+    recurrence_month_mode: form.recurrence_month_mode,
+    recurrence_month_days: form.recurrence_month_days,
+    recurrence_week_of_month: form.recurrence_week_of_month,
+    recurrence_weekday: form.recurrence_weekday,
+    recurrence_end_type: form.recurrence_end_type,
+    recurrence_end_date: form.recurrence_end_date,
+    recurrence_count: form.recurrence_count,
+  }
+  const saveRecurrence = (next: RecurrenceFields) => setForm((f) => ({ ...f, ...next }))
 
   const [locationQuery, setLocationQuery] = useState('')
   const [locationResults, setLocationResults] = useState<GeocodeResult[]>([])
@@ -464,18 +522,6 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
                 </Col>
               </>
             )}
-            {form.schedule_type === 'recurring' && (
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Recurrence type</Form.Label>
-                  <Form.Select value={form.recurrence_type} onChange={setSelect('recurrence_type')}>
-                    <option value="">Select…</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-            )}
           </Row>
           {(form.schedule_type === 'one_off' || form.schedule_type === 'recurring') && (
             <Row>
@@ -487,42 +533,45 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
               </Col>
             </Row>
           )}
-          {form.schedule_type === 'recurring' && form.recurrence_type === 'weekly' && (
-            <Row>
-              <Col md={12}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Runs on</Form.Label>
-                  <TagPillSelect options={WEEKDAY_OPTIONS} value={form.recurrence_days} onChange={setMulti('recurrence_days')} />
-                </Form.Group>
-              </Col>
-            </Row>
-          )}
-          {form.schedule_type === 'recurring' && form.recurrence_type === 'monthly' && (
-            <Row>
-              <Col md={12}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Days of the month</Form.Label>
-                  <TagPillSelect options={MONTH_DAY_OPTIONS} value={form.recurrence_month_days} onChange={setMulti('recurrence_month_days')} />
-                </Form.Group>
-              </Col>
-            </Row>
-          )}
           {form.schedule_type === 'recurring' && (
-            <Row>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Runs from</Form.Label>
-                  <Form.Control type="date" value={form.recurrence_start_date} onChange={set('recurrence_start_date')} />
-                </Form.Group>
-              </Col>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Runs until (optional)</Form.Label>
-                  <Form.Control type="date" value={form.recurrence_end_date} onChange={set('recurrence_end_date')} />
-                  <Form.Text className="text-muted">Leave blank for an ongoing recurrence until manually stopped.</Form.Text>
-                </Form.Group>
-              </Col>
-            </Row>
+            <>
+              <Row>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Runs from</Form.Label>
+                    <Form.Control type="date" value={form.recurrence_start_date} onChange={set('recurrence_start_date')} />
+                    <Form.Text className="text-muted">Recurrence is anchored to this date.</Form.Text>
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Form.Group className="mb-3">
+                <Form.Label>Recurrence</Form.Label>
+                <div className="d-flex align-items-center gap-2 flex-wrap">
+                  <span className="text-muted">
+                    {form.recurrence_type ? formatRecurrenceSummary(recurrenceFieldsForSummary(form)) : 'No recurrence pattern set yet.'}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline-secondary"
+                    size="sm"
+                    disabled={!form.recurrence_start_date}
+                    onClick={() => setShowRecurrenceModal(true)}
+                  >
+                    {form.recurrence_type ? 'Edit recurrence' : 'Set recurrence'}
+                  </Button>
+                </div>
+                {!form.recurrence_start_date && (
+                  <Form.Text className="text-muted">Set a &quot;Runs from&quot; date first.</Form.Text>
+                )}
+              </Form.Group>
+              <CustomRecurrenceModal
+                show={showRecurrenceModal}
+                onClose={() => setShowRecurrenceModal(false)}
+                onSave={saveRecurrence}
+                initial={recurrenceFields}
+                startDate={form.recurrence_start_date}
+              />
+            </>
           )}
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Experience Tags</h6>

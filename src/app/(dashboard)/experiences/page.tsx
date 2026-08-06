@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { experienceService } from '@/services/experience.service'
 import StatusBadge from '@/components/ui/StatusBadge'
+import { formatRecurrenceSummary } from '@/utils/recurrence'
 
 function ViewExperienceModal({ experienceId, onClose }: { experienceId: string | null; onClose: () => void }) {
   const { data, isLoading } = useQuery({
@@ -47,6 +48,21 @@ function ViewExperienceModal({ experienceId, onClose }: { experienceId: string |
             <p className="mb-3">
               {[data.city, data.country].filter(Boolean).join(', ') || '—'}
               {data.latitude != null && data.longitude != null && ` (${data.latitude}, ${data.longitude})`}
+            </p>
+
+            <h6 className="text-uppercase text-muted small mb-2 mt-3">Schedule</h6>
+            <p className="mb-3">
+              {!data.schedule_type && 'Not scheduled (bookable anytime)'}
+              {data.schedule_type === 'one_off' && (
+                <>
+                  One-off: {data.event_start_date}
+                  {data.event_end_date && ` – ${data.event_end_date}`}
+                  {data.start_time && ` at ${data.start_time}`}
+                </>
+              )}
+              {data.schedule_type === 'recurring' && (
+                data.recurrence_type ? formatRecurrenceSummary(data) : 'Recurring — no pattern set'
+              )}
             </p>
 
             <h6 className="text-uppercase text-muted small mb-2 mt-3">Pricing &amp; Logistics</h6>
