@@ -178,7 +178,7 @@ export default function SocialMediaImportPage() {
             )}
             <div
               ref={logRef}
-              className="font-monospace small border rounded p-2 bg-light"
+              className="font-monospace small border rounded p-2 bg-body-tertiary text-body-secondary"
               style={{ maxHeight: 300, overflowY: 'auto' }}
             >
               {events.map((event, i) => (
