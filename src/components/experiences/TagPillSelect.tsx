@@ -1,6 +1,8 @@
 'use client'
 
 import { Button } from 'react-bootstrap'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faXmark } from '@fortawesome/free-solid-svg-icons'
 
 export interface TagPillOption {
   id: string
@@ -31,10 +33,11 @@ export default function TagPillSelect({ options, value, onChange }: TagPillSelec
               type="button"
               size="sm"
               variant={selected ? 'primary' : 'outline-secondary'}
-              className="rounded-pill"
+              className="rounded-pill d-inline-flex align-items-center gap-1"
               onClick={() => toggle(option.id)}
             >
               {option.label}
+              {selected && <FontAwesomeIcon icon={faXmark} size="xs" />}
             </Button>
           )
         })}

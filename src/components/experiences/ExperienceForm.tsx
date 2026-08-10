@@ -14,6 +14,7 @@ import type { Experience } from '@/types'
 import { formatRecurrenceSummary, type RecurrenceSummaryInput } from '@/utils/recurrence'
 import TagPillSelect from './TagPillSelect'
 import CustomRecurrenceModal, { type RecurrenceFields } from './CustomRecurrenceModal'
+import TimeInput from './TimeInput'
 
 // interest_tags is a free-form Postgres array server-side, so any ids here are safe to add.
 const INTEREST_OPTIONS = [
@@ -59,7 +60,6 @@ const emptyForm = {
   currency: 'NGN',
   duration_hours: '',
   duration_mins: '',
-  group_size_min: '',
   group_size_max: '',
   interest_tags: [] as string[],
   energy_level: '',
@@ -117,7 +117,6 @@ function toFormState(exp?: Partial<Experience>): FormState {
     currency: exp.currency ?? 'NGN',
     duration_hours: exp.duration_minutes != null ? String(Math.floor(exp.duration_minutes / 60)) : '',
     duration_mins: exp.duration_minutes != null ? String(exp.duration_minutes % 60) : '',
-    group_size_min: exp.group_size_min != null ? String(exp.group_size_min) : '',
     group_size_max: exp.group_size_max != null ? String(exp.group_size_max) : '',
     interest_tags: exp.interest_tags ?? [],
     energy_level: exp.energy_level ?? '',
@@ -207,7 +206,6 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         duration_minutes: (form.duration_hours || form.duration_mins)
           ? Number(form.duration_hours || 0) * 60 + Number(form.duration_mins || 0)
           : undefined,
-        group_size_min: form.group_size_min ? Number(form.group_size_min) : undefined,
         group_size_max: form.group_size_max ? Number(form.group_size_max) : undefined,
         interest_tags: form.interest_tags.length ? form.interest_tags : undefined,
         energy_level: form.energy_level || undefined,
@@ -481,12 +479,6 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Min group size</Form.Label>
-                <Form.Control type="number" min={1} value={form.group_size_min} onChange={set('group_size_min')} />
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group className="mb-3">
                 <Form.Label>Max group size</Form.Label>
                 <Form.Control type="number" min={1} value={form.group_size_max} onChange={set('group_size_max')} />
               </Form.Group>
@@ -528,7 +520,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
               <Col md={4}>
                 <Form.Group className="mb-3">
                   <Form.Label>Start time</Form.Label>
-                  <Form.Control type="time" value={form.start_time} onChange={set('start_time')} />
+                  <TimeInput value={form.start_time} onChange={(next) => setForm((f) => ({ ...f, start_time: next }))} />
                 </Form.Group>
               </Col>
             </Row>

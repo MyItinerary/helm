@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { experienceService } from '@/services/experience.service'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { formatRecurrenceSummary } from '@/utils/recurrence'
+import { formatTime12h } from '@/utils/time'
 
 function ViewExperienceModal({ experienceId, onClose }: { experienceId: string | null; onClose: () => void }) {
   const { data, isLoading } = useQuery({
@@ -57,7 +58,7 @@ function ViewExperienceModal({ experienceId, onClose }: { experienceId: string |
                 <>
                   One-off: {data.event_start_date}
                   {data.event_end_date && ` – ${data.event_end_date}`}
-                  {data.start_time && ` at ${data.start_time}`}
+                  {data.start_time && ` at ${formatTime12h(data.start_time)}`}
                 </>
               )}
               {data.schedule_type === 'recurring' && (
@@ -72,7 +73,7 @@ function ViewExperienceModal({ experienceId, onClose }: { experienceId: string |
                 {data.price_from != null ? `${data.currency ?? 'USD'} ${data.price_from}` : '—'}
               </Col>
               <Col md={4}><strong>Duration:</strong> {data.duration_minutes ?? '—'} min</Col>
-              <Col md={4}><strong>Group size:</strong> {data.group_size_min ?? '—'}–{data.group_size_max ?? '—'}</Col>
+              <Col md={4}><strong>Max group size:</strong> {data.group_size_max ?? '—'}</Col>
             </Row>
 
             <h6 className="text-uppercase text-muted small mb-2 mt-3">Experience Tags</h6>
