@@ -6,7 +6,7 @@ import {
 import { useEffect, useState } from 'react'
 import { format, getDate, parseISO } from 'date-fns'
 import {
-  WEEKDAY_OPTIONS, MONTH_DAY_OPTIONS, getNthWeekdayOfMonth, ordinalLabel, weekdayFullLabel,
+  WEEKDAY_OPTIONS, getNthWeekdayOfMonth, ordinalLabel, weekdayFullLabel,
   type RecurrenceFrequency, type RecurrenceMonthMode, type RecurrenceEndType,
 } from '@/utils/recurrence'
 import TagPillSelect from './TagPillSelect'
@@ -83,15 +83,15 @@ export default function CustomRecurrenceModal({
     })
   }
 
+  // Both monthly modes are fully derived from the start date — no separate day picker,
+  // so there's nothing to preserve across mode switches beyond recomputing from scratch.
   const setMonthMode = (mode: RecurrenceMonthMode) => {
     setDraft((d) => {
       if (mode === 'day_of_month') {
         return {
           ...d,
           recurrence_month_mode: mode,
-          recurrence_month_days: d.recurrence_month_days.length
-            ? d.recurrence_month_days
-            : (dayOfMonthFromStart ? [String(dayOfMonthFromStart)] : []),
+          recurrence_month_days: dayOfMonthFromStart ? [String(dayOfMonthFromStart)] : [],
         }
       }
       return {
@@ -159,31 +159,23 @@ export default function CustomRecurrenceModal({
 
             {draft.recurrence_type === 'monthly' && (
               <Form.Group className="mb-3">
-                <Form.Select
-                  value={draft.recurrence_month_mode}
-                  onChange={(e) => setMonthMode(e.target.value as RecurrenceMonthMode)}
-                >
-                  <option value="day_of_month">
-                    {dayOfMonthFromStart ? `Monthly on day ${dayOfMonthFromStart}` : 'Monthly on day…'}
-                  </option>
-                  <option value="day_of_week">
-                    {nthWeekdayFromStart
-                      ? `Monthly on the ${ordinalLabel(nthWeekdayFromStart.ordinal)} ${weekdayFullLabel(nthWeekdayFromStart.weekday)}`
-                      : 'Monthly on the…'}
-                  </option>
-                </Form.Select>
-                {draft.recurrence_month_mode === 'day_of_month' && (
-                  <div className="mt-2">
-                    <Form.Text className="text-muted d-block mb-1">
-                      Runs on these day(s) of the month:
-                    </Form.Text>
-                    <TagPillSelect
-                      options={MONTH_DAY_OPTIONS}
-                      value={draft.recurrence_month_days}
-                      onChange={(next) => setDraft((d) => ({ ...d, recurrence_month_days: next }))}
-                    />
-                  </div>
-                )}
+                <Form.Label>Monthly recurrence</Form.Label>
+                <Form.Check
+                  type="radio"
+                  id="recurrence-month-mode-day"
+                  name="recurrence-month-mode"
+                  label={`Specific day of the month${dayOfMonthFromStart ? ` (${ordinalDay(dayOfMonthFromStart)})` : ''}`}
+                  checked={draft.recurrence_month_mode === 'day_of_month'}
+                  onChange={() => setMonthMode('day_of_month')}
+                />
+                <Form.Check
+                  type="radio"
+                  id="recurrence-month-mode-weekday"
+                  name="recurrence-month-mode"
+                  label={`Relative weekday${nthWeekdayFromStart ? ` (the ${ordinalLabel(nthWeekdayFromStart.ordinal)} ${weekdayFullLabel(nthWeekdayFromStart.weekday)})` : ''}`}
+                  checked={draft.recurrence_month_mode === 'day_of_week'}
+                  onChange={() => setMonthMode('day_of_week')}
+                />
               </Form.Group>
             )}
 
@@ -254,4 +246,11 @@ export default function CustomRecurrenceModal({
 function pluralizeLabel(singular: string, intervalValue: string): string {
   const n = Number(intervalValue) || 1
   return n === 1 ? singular : `${singular}s`
+}
+
+function ordinalDay(day: number): string {
+  if (day % 10 === 1 && day % 100 !== 11) return `${day}st`
+  if (day % 10 === 2 && day % 100 !== 12) return `${day}nd`
+  if (day % 10 === 3 && day % 100 !== 13) return `${day}rd`
+  return `${day}th`
 }
