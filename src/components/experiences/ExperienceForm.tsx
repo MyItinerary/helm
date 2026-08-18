@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { experienceService } from '@/services/experience.service'
 import { uploadService } from '@/services/upload.service'
 import { searchLocation, type GeocodeResult } from '@/lib/geocoding'
+import { useCategoryOptions } from '@/hooks/use-category-options'
 import type { Experience } from '@/types'
 import { formatRecurrenceSummary, type RecurrenceSummaryInput } from '@/utils/recurrence'
 import TagPillSelect from './TagPillSelect'
@@ -27,18 +28,9 @@ const INTEREST_OPTIONS = [
   { id: 'street_life', label: 'Street life' },
   { id: 'events', label: 'Events & live shows' },
 ]
-// social_style is a Postgres enum locked to these 4 values — don't add a 5th
-// option here without a backend migration. Labels mirror how the mobile
-// app's onboarding already collapses 5 UX choices down to these 4 ids.
-const SOCIAL_STYLE_OPTIONS = [
-  { id: 'solo', label: 'Solo / low-interaction' },
-  { id: 'couple', label: 'With a partner' },
-  { id: 'group', label: 'Small group (2–4 people)' },
-  { id: 'open', label: 'Big group energy' },
-]
-const ENERGY_OPTIONS = ['chill', 'balanced', 'high']
-const BUDGET_OPTIONS = ['low', 'medium', 'high']
-const COMFORT_OPTIONS = ['tourist', 'mixed', 'local']
+// energy_level, budget_range, comfort_level, and social_style are admin-editable
+// categories (see the Categories admin page) — their option lists are fetched
+// live via useCategoryOptions() below rather than hardcoded here.
 const TIME_OF_DAY_OPTIONS = ['day', 'night']
 const RISK_LEVEL_OPTIONS = ['LOW', 'MEDIUM', 'HIGH']
 const MOBILITY_OPTIONS = ['FULL', 'LIMITED', 'UNKNOWN']
@@ -190,6 +182,11 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
   const router = useRouter()
   const [form, setForm] = useState<FormState>(() => toFormState(initialValues))
   const queryClient = useQueryClient()
+  const { byType: categoriesByType, isLoading: categoriesLoading } = useCategoryOptions()
+  const socialStyleOptions = (categoriesByType.social_style ?? []).map((c) => ({ id: c.slug, label: c.text }))
+  const energyOptions = categoriesByType.energy_level ?? []
+  const budgetOptions = categoriesByType.budget_level ?? []
+  const comfortOptions = categoriesByType.comfort_level ?? []
 
   const { mutate, isPending } = useMutation({
     mutationFn: () => {
@@ -577,7 +574,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Social style</Form.Label>
-                <TagPillSelect options={SOCIAL_STYLE_OPTIONS} value={form.social_style} onChange={setMulti('social_style')} />
+                <TagPillSelect options={socialStyleOptions} value={form.social_style} onChange={setMulti('social_style')} />
               </Form.Group>
             </Col>
           </Row>
@@ -585,27 +582,27 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>Exploration pace</Form.Label>
-                <Form.Select value={form.energy_level} onChange={setSelect('energy_level')}>
-                  <option value="">Select…</option>
-                  {ENERGY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                <Form.Select value={form.energy_level} onChange={setSelect('energy_level')} disabled={categoriesLoading}>
+                  <option value="">{categoriesLoading ? 'Loading…' : 'Select…'}</option>
+                  {energyOptions.map((o) => <option key={o.id} value={o.slug}>{o.text}</option>)}
                 </Form.Select>
               </Form.Group>
             </Col>
             <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>Budget range</Form.Label>
-                <Form.Select value={form.budget_range} onChange={setSelect('budget_range')}>
-                  <option value="">Select…</option>
-                  {BUDGET_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                <Form.Select value={form.budget_range} onChange={setSelect('budget_range')} disabled={categoriesLoading}>
+                  <option value="">{categoriesLoading ? 'Loading…' : 'Select…'}</option>
+                  {budgetOptions.map((o) => <option key={o.id} value={o.slug}>{o.text}</option>)}
                 </Form.Select>
               </Form.Group>
             </Col>
             <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>Comfort level</Form.Label>
-                <Form.Select value={form.comfort_level} onChange={setSelect('comfort_level')}>
-                  <option value="">Select…</option>
-                  {COMFORT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                <Form.Select value={form.comfort_level} onChange={setSelect('comfort_level')} disabled={categoriesLoading}>
+                  <option value="">{categoriesLoading ? 'Loading…' : 'Select…'}</option>
+                  {comfortOptions.map((o) => <option key={o.id} value={o.slug}>{o.text}</option>)}
                 </Form.Select>
               </Form.Group>
             </Col>
