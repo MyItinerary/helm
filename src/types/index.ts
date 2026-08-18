@@ -1,5 +1,29 @@
 export type AdminRole = 'admin' | 'superadmin'
 
+export interface Category {
+  id: number
+  parent_id: number | null
+  slug: string
+  text: string
+  weight: number
+  category_type: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  admin_id: string | null
+}
+
+export interface CategoryCreate {
+  parent_id?: number | null
+  slug: string
+  text: string
+  weight: number
+  category_type: string
+  is_active?: boolean
+}
+
+export type CategoryUpdate = Partial<CategoryCreate>
+
 export interface Admin {
   id: string
   email: string

@@ -5,6 +5,8 @@ import {
   Button, Card, Col, Form, Row, Spinner,
 } from 'react-bootstrap'
 import { TemporaryExperience, GeneratedExperienceJson } from '@/types'
+import { useCategoryOptions } from '@/hooks/use-category-options'
+import TagPillSelect from './TagPillSelect'
 
 interface Props {
   experience: TemporaryExperience
@@ -21,6 +23,11 @@ export default function TemporaryExperienceForm({
 }: Props) {
   const [formData, setFormData] = useState<GeneratedExperienceJson>(experience.generated_experience_json)
   const [mediaUrl, setMediaUrl] = useState(experience.media_url ?? '')
+  const { byType: categoriesByType, isLoading: categoriesLoading } = useCategoryOptions()
+  const energyOptions = categoriesByType.energy_level ?? []
+  const budgetOptions = categoriesByType.budget_level ?? []
+  const comfortOptions = categoriesByType.comfort_level ?? []
+  const socialStyleOptions = (categoriesByType.social_style ?? []).map((c) => ({ id: c.slug, label: c.text }))
 
   const handleChange = (path: string, value: any) => {
     setFormData((prev) => {
@@ -230,28 +237,40 @@ export default function TemporaryExperienceForm({
             <Col md={3}>
               <Form.Group className="mb-3">
                 <Form.Label>Energy Level</Form.Label>
-                <Form.Control
+                <Form.Select
                   value={formData.energy_level ?? ''}
                   onChange={(e) => handleChange('energy_level', e.target.value)}
-                />
+                  disabled={categoriesLoading}
+                >
+                  <option value="">{categoriesLoading ? 'Loading…' : 'Select…'}</option>
+                  {energyOptions.map((o) => <option key={o.id} value={o.slug}>{o.text}</option>)}
+                </Form.Select>
               </Form.Group>
             </Col>
             <Col md={3}>
               <Form.Group className="mb-3">
                 <Form.Label>Budget Range</Form.Label>
-                <Form.Control
+                <Form.Select
                   value={formData.budget_range ?? ''}
                   onChange={(e) => handleChange('budget_range', e.target.value)}
-                />
+                  disabled={categoriesLoading}
+                >
+                  <option value="">{categoriesLoading ? 'Loading…' : 'Select…'}</option>
+                  {budgetOptions.map((o) => <option key={o.id} value={o.slug}>{o.text}</option>)}
+                </Form.Select>
               </Form.Group>
             </Col>
             <Col md={3}>
               <Form.Group className="mb-3">
                 <Form.Label>Comfort Level</Form.Label>
-                <Form.Control
+                <Form.Select
                   value={formData.comfort_level ?? ''}
                   onChange={(e) => handleChange('comfort_level', e.target.value)}
-                />
+                  disabled={categoriesLoading}
+                >
+                  <option value="">{categoriesLoading ? 'Loading…' : 'Select…'}</option>
+                  {comfortOptions.map((o) => <option key={o.id} value={o.slug}>{o.text}</option>)}
+                </Form.Select>
               </Form.Group>
             </Col>
             <Col md={3}>
@@ -276,10 +295,11 @@ export default function TemporaryExperienceForm({
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Social Style (comma separated)</Form.Label>
-                <Form.Control
-                  value={formData.social_style?.join(', ') ?? ''}
-                  onChange={(e) => handleChange('social_style', e.target.value.split(',').map(s => s.trim()))}
+                <Form.Label>Social Style</Form.Label>
+                <TagPillSelect
+                  options={socialStyleOptions}
+                  value={formData.social_style ?? []}
+                  onChange={(next) => handleChange('social_style', next)}
                 />
               </Form.Group>
             </Col>
