@@ -2,7 +2,7 @@ import api from '@/lib/api'
 import type { Category, CategoryCreate, CategoryUpdate } from '@/types'
 
 export const categoryService = {
-  list: (categoryType?: string) => api.get<Category[]>('/categories', { params: categoryType ? { category_type: categoryType } : undefined }).then((r) => r.data),
+  list: (categoryType?: string) => api.get<Category[]>('/admin/categories', { params: categoryType ? { category_type: categoryType } : undefined }).then((r) => r.data),
 
   create: (data: CategoryCreate) => api.post<Category>('/admin/categories', data).then((r) => r.data),
 
