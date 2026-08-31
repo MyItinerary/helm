@@ -18,4 +18,10 @@ export const adminService = {
 
   changePassword: (data: { current_password: string; new_password: string }) =>
     api.post('/admin/me/change-password', data).then((r) => r.data),
+
+  // Unauthenticated — hit from the emailed invite link before the admin has a session.
+  // The axios interceptor only adds a bearer token if the cookie exists, so this is safe
+  // to send through the shared `api` instance with no token present.
+  setupPassword: (data: { token: string; new_password: string }) =>
+    api.post('/admin/password/setup', data).then((r) => r.data),
 }
