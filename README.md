@@ -1,77 +1,72 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app --typescript`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Helm
 
-## Next.JS Dashboard
+The guide + admin web portal for **MyJourny** — where local guides list and manage experiences, and where MyJourny staff oversee the marketplace.
 
-A Next.JS boilerplate with the famous Open Source Boostrap Admin Template, [CoreUI](https://coreui.io/).
+## Problem
 
-This dashboard is built with `Typescript` and [React Bootstrap](https://react-bootstrap.github.io/), using the App Router.
+Finding an authentic, local-led travel experience is harder than it should be. Generic listing sites and map apps surface the same crowded landmarks and stale reviews, with no reliable way to tell which local guides are trustworthy, available, and worth paying. On the other side, local guides have no real marketplace: no easy way to list an experience, get discovered by the right traveller, take a booking, and actually get paid — so a lot of great local expertise never reaches the travellers who'd pay for it.
 
-![Powered by Vercel](https://images.ctfassets.net/e5382hct74si/78Olo8EZRdUlcDUFQvnzG7/fa4cdb6dc04c40fceac194134788a0e2/1618983297-powered-by-vercel.svg)
+## Value proposition
 
-## Screenshot
+MyJourny connects travellers with vetted local guides for bookable, curated experiences — verified guides, integrated payments and payouts, and semantic discovery, replacing generic listings with real local expertise.
 
-### Dashboard
+This portal is the guide- and operator-facing side of that promise:
 
-https://nextjs-dashboard-olive.vercel.app
+- **Guides run their business here** — create and manage experience listings, see bookings come in, and track payouts, without needing to touch the backend directly.
+- **Verification and trust are enforced here, not assumed** — guide onboarding and approval, dispute visibility, and moderation happen in this portal before an experience reaches a traveller.
+- **Admins keep the marketplace healthy** — user, booking, payment, and team management live under one roof so the platform can be operated day to day, not just built.
 
-| Light                                                                                                                                                       | Dark                                                                                                                                                       |
-|-------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [<img alt="Dashboard" width="400" src="https://raw.githubusercontent.com/kitloong/screenshot/main/light.png" />](https://nextjs-dashboard-olive.vercel.app) | [<img alt="Dashboard" width="400" src="https://raw.githubusercontent.com/kitloong/screenshot/main/dark.png" />](https://nextjs-dashboard-olive.vercel.app) |
+## Tech Stack
 
-| Mobile (collapsed)                                                                                                                                                                           | Mobile (expand)                                                                                                                                                                              |
-|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [<img alt="Dashboard" height="278" src="https://user-images.githubusercontent.com/7660346/190973509-f681c230-54ba-4ee5-bd8c-7929ef24b6aa.png" />](https://nextjs-dashboard-olive.vercel.app) | [<img alt="Dashboard" height="278" src="https://user-images.githubusercontent.com/7660346/190973862-29c311ab-8867-4399-ad4d-01f2d073d7a2.png" />](https://nextjs-dashboard-olive.vercel.app) |
-
-### Sample page
-
-https://nextjs-dashboard-olive.vercel.app/pokemons
-
-#### Multilingual
-
-| English                                                                                                                                                           | 日本語                                                                                                                                                               |
-|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [<img alt="Sample page" width="400" src="https://raw.githubusercontent.com/kitloong/screenshot/main/en.png">](https://nextjs-dashboard-olive.vercel.app/pokemons) | [<img alt="Sample page" width="400" src="https://raw.githubusercontent.com/kitloong/screenshot/main/ja.png">](https://nextjs-dashboard-olive.vercel.app/pokemons) |
-
-
-### Login
-
-https://nextjs-dashboard-olive.vercel.app/login
-
-[<img alt="Login" width="400" src="https://user-images.githubusercontent.com/7660346/180629556-539b6157-b34f-4ecc-aed9-b34f94d5d2ef.png" />](https://nextjs-dashboard-olive.vercel.app/login)
-
-### Register
-
-https://nextjs-dashboard-olive.vercel.app/register
-
-[<img alt="Register" width="400" src="https://user-images.githubusercontent.com/7660346/180629498-1b23eb9a-cfd4-4909-8c02-58eaf6b06ff5.png" />](https://nextjs-dashboard-olive.vercel.app/register)
+Next.js 14 (App Router) · TypeScript · React Bootstrap + CoreUI admin template · Chart.js · Zustand · TanStack Query · Axios · Cypress (e2e) · pnpm
 
 ## Getting Started
 
-First, setup the application:
-
 ```bash
 pnpm install
-```
-
-Then, run the development server:
-
-```bash
 pnpm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the result.
 
-You can start editing the page by modifying `app/(dashboard)/page.tsx`. The page auto-updates as you edit the file.
+Copy `.env.example` to `.env.local` (and set up `.env.development`/`.env.production` as needed) and fill in the values before running — check `.env.example` for the current full list, since it varies by environment.
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+helm/
+├── src/
+│   ├── app/                 # App Router routes
+│   │   ├── (authentication)/  # Login
+│   │   └── (dashboard)/       # Authenticated portal
+│   │       ├── admin/          # Admin-only views
+│   │       ├── bookings/       # Booking management
+│   │       ├── experiences/    # Guide experience listings
+│   │       ├── guides/         # Guide management/verification
+│   │       ├── payments/       # Payment/payout views
+│   │       ├── settings/       # Account/portal settings
+│   │       ├── team/           # Team/staff management
+│   │       └── users/          # Traveller user management
+│   ├── components/          # UI components
+│   ├── hooks/                # Custom hooks
+│   ├── lib/                  # Shared utilities/config
+│   ├── services/             # API client / service layer (talks to `itin`)
+│   ├── store/                 # Zustand stores
+│   ├── styles/, themes/      # CoreUI/Bootstrap theming
+│   ├── types/, zod/           # TypeScript types + Zod schemas
+│   └── middleware.ts         # Route protection
+└── cypress/                  # End-to-end tests
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Testing
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+```bash
+pnpm cypress open   # interactive
+pnpm cypress run    # headless
+```
 
-## Reference
+## Notes
 
-1. https://react-typescript-cheatsheet.netlify.app/docs/basic/getting-started/function_components/
+- Talks to the [`itin`](https://github.com/MyItinerary/itin) API for all data — guides, experiences, bookings, users, payments.
+- Shares the same Google OAuth client ID and JWT auth as the [`mobile-app`](https://github.com/MyItinerary/myjourny).
+- Supersedes the earlier `admin` repo (deprecated, different UI toolkit — shadcn/ui + Tailwind vs. this repo's Bootstrap/CoreUI). Don't port components 1:1 from it; expect a rewrite at the component layer.
