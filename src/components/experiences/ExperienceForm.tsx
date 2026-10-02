@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { experienceService } from '@/services/experience.service'
+import { pricingService } from '@/services/pricing.service'
 import { uploadService } from '@/services/upload.service'
 import { searchLocation, type GeocodeResult } from '@/lib/geocoding'
 import { useCategoryOptions } from '@/hooks/use-category-options'
@@ -16,6 +17,7 @@ import { formatRecurrenceSummary, type RecurrenceSummaryInput } from '@/utils/re
 import TagPillSelect from './TagPillSelect'
 import CustomRecurrenceModal, { type RecurrenceFields } from './CustomRecurrenceModal'
 import TimeInput from './TimeInput'
+import ExperiencePricingManager from './ExperiencePricingManager'
 
 // interest_tags is a free-form Postgres array server-side, so any ids here are safe to add.
 const INTEREST_OPTIONS = [
@@ -198,7 +200,6 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         country: form.country || undefined,
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
-        price_from: form.price_from ? Number(form.price_from) : undefined,
         currency: form.currency || undefined,
         duration_minutes: (form.duration_hours || form.duration_mins)
           ? Number(form.duration_hours || 0) * 60 + Number(form.duration_mins || 0)
@@ -255,17 +256,31 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           emergencyGuidance: form.emergency_guidance || undefined,
         } : undefined,
       }
-      return mode === 'edit' && experienceId
-        ? experienceService.update(experienceId, payload)
-        : experienceService.create(payload)
+      if (mode === 'edit' && experienceId) {
+        return experienceService.update(experienceId, payload)
+      }
+      // A new experience gets a "Standard" ticket at the price entered, so
+      // it's bookable straight away; more pricing is managed on the edit page.
+      return experienceService.create(payload).then(async (created) => {
+        if (form.price_from !== '') {
+          await pricingService.createTicket(created.id, {
+            label: 'Standard',
+            amount: form.price_from,
+            pricing_unit: 'per_person',
+          })
+        }
+        return created
+      })
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
       toast.success(mode === 'edit' ? 'Experience updated' : 'Experience created')
       queryClient.invalidateQueries({ queryKey: ['experiences'] })
       if (mode === 'edit' && experienceId) {
         queryClient.invalidateQueries({ queryKey: ['experience', experienceId] })
+        router.push('/experiences')
+      } else {
+        router.push(`/experiences/${saved.id}/edit`)
       }
-      router.push('/experiences')
     },
     onError: () => toast.error(mode === 'edit' ? 'Failed to update experience' : 'Failed to create experience'),
   })
@@ -443,12 +458,15 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Pricing &amp; Logistics</h6>
           <Row>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Price from</Form.Label>
-                <Form.Control type="number" min={0} value={form.price_from} onChange={set('price_from')} />
-              </Form.Group>
-            </Col>
+            {mode !== 'edit' && (
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Standard ticket price</Form.Label>
+                  <Form.Control type="number" min={0} value={form.price_from} onChange={set('price_from')} />
+                  <Form.Text className="text-muted">Per person. Add ticket types, add-ons and rules after creating.</Form.Text>
+                </Form.Group>
+              </Col>
+            )}
             <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>Currency</Form.Label>
@@ -745,6 +763,8 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           </div>
         </CardBody>
       </Card>
+
+      {mode === 'edit' && experienceId && <ExperiencePricingManager experienceId={experienceId} />}
     </div>
   )
 }

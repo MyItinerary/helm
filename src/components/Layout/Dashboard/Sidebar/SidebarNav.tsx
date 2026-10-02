@@ -1,6 +1,6 @@
 import {
   faGauge, faUsers, faMapMarkerAlt, faCalendarCheck,
-  faCreditCard, faGear, faUserShield, faTags,
+  faCreditCard, faGear, faUserShield, faTags, faTicket,
 } from '@fortawesome/free-solid-svg-icons'
 import { faCompass } from '@fortawesome/free-regular-svg-icons'
 import { cookies } from 'next/headers'
@@ -54,6 +54,10 @@ export default async function SidebarNav() {
 
       <SidebarNavItem icon={faTags} href="/admin/categories">
         Categories
+      </SidebarNavItem>
+
+      <SidebarNavItem icon={faTicket} href="/admin/promo-codes">
+        Promo Codes
       </SidebarNavItem>
 
       <li className="nav-title px-3 py-2 mt-3 text-uppercase fw-bold small">System</li>
