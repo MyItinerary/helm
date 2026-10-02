@@ -1,6 +1,6 @@
 import {
   faGauge, faUsers, faMapMarkerAlt, faCalendarCheck,
-  faCreditCard, faGear, faUserShield, faTags, faTicket,
+  faCreditCard, faGear, faUserShield, faTags, faTicket, faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons'
 import { faCompass } from '@fortawesome/free-regular-svg-icons'
 import { cookies } from 'next/headers'
@@ -40,6 +40,10 @@ export default async function SidebarNav() {
 
       <SidebarNavItem icon={faCreditCard} href="/payments">
         Payments & Payouts
+      </SidebarNavItem>
+
+      <SidebarNavItem icon={faRotateLeft} href="/refunds">
+        Refunds
       </SidebarNavItem>
 
       <li className="nav-title px-3 py-2 mt-3 text-uppercase fw-bold small">Admin Tools</li>

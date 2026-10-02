@@ -1,16 +1,19 @@
 'use client'
 
 import {
-  Card, CardBody, CardHeader, Col, Form, Row, Spinner, Table,
+  Button, Card, CardBody, CardHeader, Col, Form, Row, Spinner, Table,
 } from 'react-bootstrap'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { bookingService } from '@/services/booking.service'
+import { money } from '@/services/refund.service'
 import StatusBadge from '@/components/ui/StatusBadge'
+import RefundDecisionModal from '@/components/refunds/RefundDecisionModal'
 
 export default function BookingsPage() {
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState('')
+  const [refundingId, setRefundingId] = useState<string | null>(null)
   const limit = 20
 
   const { data, isLoading } = useQuery({
@@ -57,11 +60,12 @@ export default function BookingsPage() {
                   <th>Status</th>
                   <th>Payment</th>
                   <th>Date</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {data?.items.length === 0 && (
-                  <tr><td colSpan={7} className="text-center text-muted py-4">No bookings found</td></tr>
+                  <tr><td colSpan={8} className="text-center text-muted py-4">No bookings found</td></tr>
                 )}
                 {data?.items.map((booking) => (
                   <tr key={booking.id} className="align-middle">
@@ -71,14 +75,22 @@ export default function BookingsPage() {
                     <td className="small">{booking.user?.email ?? booking.user_id}</td>
                     <td className="small">{booking.experience?.title ?? booking.experience_id}</td>
                     <td>
-                      {booking.amount != null
-                        ? `${booking.currency ?? '$'}${booking.amount.toLocaleString()}`
-                        : '—'}
+                      {booking.price_total != null ? money(booking.price_total, booking.currency) : '—'}
+                      {Number(booking.refunded_amount ?? 0) > 0 && (
+                        <div className="small text-success">−{money(booking.refunded_amount, booking.currency)} refunded</div>
+                      )}
                     </td>
                     <td><StatusBadge status={booking.status} /></td>
                     <td><StatusBadge status={booking.payment_status} /></td>
                     <td className="text-muted small">
                       {new Date(booking.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="text-end">
+                      {(booking.payment_status === 'paid' || booking.payment_status === 'partial') && (
+                        <Button size="sm" variant="outline-danger" onClick={() => setRefundingId(booking.id)}>
+                          Refund
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -98,6 +110,8 @@ export default function BookingsPage() {
           </div>
         )}
       </Card>
+
+      <RefundDecisionModal show={!!refundingId} bookingId={refundingId} onHide={() => setRefundingId(null)} />
     </div>
   )
 }

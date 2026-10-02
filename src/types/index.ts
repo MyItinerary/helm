@@ -167,8 +167,10 @@ export interface Booking {
   guide_id: string
   experience_id: string
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'expired'
-  payment_status: 'unpaid' | 'paid' | 'refunded'
-  amount?: number
+  payment_status: 'unpaid' | 'paid' | 'refunded' | 'partial'
+  // itin returns money as decimal strings ("12000.00").
+  price_total?: string | number | null
+  refunded_amount?: string | number | null
   currency?: string
   payment_provider?: 'stripe' | 'paystack'
   scheduled_at?: string
