@@ -173,7 +173,9 @@ export interface Booking {
   refunded_amount?: string | number | null
   currency?: string
   payment_provider?: 'stripe' | 'paystack'
-  scheduled_at?: string
+  // When the session starts (UTC). Null for bookings with no set time.
+  requested_datetime?: string | null
+  party_size?: number | null
   created_at: string
   user?: Pick<User, 'id' | 'email'>
   guide?: Pick<Guide, 'id' | 'display_name'>

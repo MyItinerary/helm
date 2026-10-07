@@ -62,6 +62,23 @@ export function getNthWeekdayOfMonth(date: Date): { ordinal: 1 | 2 | 3 | 4 | -1;
   return { ordinal: rawOrdinal >= 5 ? -1 : (rawOrdinal as 1 | 2 | 3 | 4), weekday }
 }
 
+/**
+ * The relative-weekday fields ("the 4th Wednesday") are derived from the start date,
+ * so they go stale when it changes. Re-derive them; other fields are left as they are.
+ */
+export function withDerivedMonthFields<T extends {
+  recurrence_type: string
+  recurrence_month_mode: string
+  recurrence_week_of_month: string
+  recurrence_weekday: string
+}>(fields: T, startDate: string): T {
+  if (!startDate || fields.recurrence_type !== 'monthly' || fields.recurrence_month_mode !== 'day_of_week') {
+    return fields
+  }
+  const { ordinal, weekday } = getNthWeekdayOfMonth(parseISO(startDate))
+  return { ...fields, recurrence_week_of_month: String(ordinal), recurrence_weekday: weekday }
+}
+
 export function ordinalLabel(n: 1 | 2 | 3 | 4 | -1): string {
   if (n === -1) return 'last'
   return ['first', 'second', 'third', 'fourth'][n - 1]

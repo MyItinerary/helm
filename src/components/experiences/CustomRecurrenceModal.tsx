@@ -6,7 +6,8 @@ import {
 import { useEffect, useState } from 'react'
 import { format, getDate, parseISO } from 'date-fns'
 import {
-  WEEKDAY_OPTIONS, getNthWeekdayOfMonth, ordinalLabel, weekdayFullLabel,
+  MONTH_DAY_OPTIONS, WEEKDAY_OPTIONS, getNthWeekdayOfMonth, ordinalLabel, weekdayFullLabel,
+  withDerivedMonthFields,
   type RecurrenceFrequency, type RecurrenceMonthMode, type RecurrenceEndType,
 } from '@/utils/recurrence'
 import TagPillSelect from './TagPillSelect'
@@ -62,9 +63,10 @@ export default function CustomRecurrenceModal({
   const [draft, setDraft] = useState<RecurrenceFields>(initial)
 
   // Re-seed from the form's committed values every time the dialog opens, so "Cancel"
-  // is a true no-op regardless of what was edited during the previous open.
+  // is a true no-op regardless of what was edited during the previous open. The
+  // relative-weekday fields are re-derived in case "Runs from" changed since.
   useEffect(() => {
-    if (show) setDraft(initial)
+    if (show) setDraft(withDerivedMonthFields(initial, startDate))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show])
 
@@ -83,15 +85,16 @@ export default function CustomRecurrenceModal({
     })
   }
 
-  // Both monthly modes are fully derived from the start date — no separate day picker,
-  // so there's nothing to preserve across mode switches beyond recomputing from scratch.
+  // Day-of-month starts from the start date's day and can be changed in the picker;
+  // the relative weekday is always derived from the start date.
   const setMonthMode = (mode: RecurrenceMonthMode) => {
     setDraft((d) => {
       if (mode === 'day_of_month') {
+        const fromStart = dayOfMonthFromStart ? [String(dayOfMonthFromStart)] : []
         return {
           ...d,
           recurrence_month_mode: mode,
-          recurrence_month_days: dayOfMonthFromStart ? [String(dayOfMonthFromStart)] : [],
+          recurrence_month_days: d.recurrence_month_days.length ? d.recurrence_month_days : fromStart,
         }
       }
       return {
@@ -136,6 +139,9 @@ export default function CustomRecurrenceModal({
                     value={draft.recurrence_type}
                     onChange={(e) => setUnit(e.target.value as RecurrenceFrequency)}
                   >
+                    {/* Without a placeholder the browser shows "day" while the value is
+                        still empty, and picking it fires no change. */}
+                    {!draft.recurrence_type && <option value="" disabled>Choose…</option>}
                     {FREQUENCY_OPTIONS.map((o) => (
                       <option key={o.id} value={o.id}>
                         {pluralizeLabel(o.label, draft.recurrence_interval)}
@@ -164,10 +170,27 @@ export default function CustomRecurrenceModal({
                   type="radio"
                   id="recurrence-month-mode-day"
                   name="recurrence-month-mode"
-                  label={`Specific day of the month${dayOfMonthFromStart ? ` (${ordinalDay(dayOfMonthFromStart)})` : ''}`}
+                  label="Specific days of the month"
                   checked={draft.recurrence_month_mode === 'day_of_month'}
                   onChange={() => setMonthMode('day_of_month')}
                 />
+                {draft.recurrence_month_mode === 'day_of_month' && (
+                  <div className="ms-4 my-2">
+                    <TagPillSelect
+                      options={MONTH_DAY_OPTIONS}
+                      value={draft.recurrence_month_days}
+                      onChange={(next) => setDraft((d) => ({
+                        ...d,
+                        recurrence_month_days: [...next].sort((a, b) => Number(a) - Number(b)),
+                      }))}
+                    />
+                    {draft.recurrence_month_days.some((day) => Number(day) > 28) && (
+                      <Form.Text className="text-muted d-block">
+                        Months without that day are skipped (e.g. the 31st doesn&apos;t run in April).
+                      </Form.Text>
+                    )}
+                  </div>
+                )}
                 <Form.Check
                   type="radio"
                   id="recurrence-month-mode-weekday"
@@ -246,11 +269,4 @@ export default function CustomRecurrenceModal({
 function pluralizeLabel(singular: string, intervalValue: string): string {
   const n = Number(intervalValue) || 1
   return n === 1 ? singular : `${singular}s`
-}
-
-function ordinalDay(day: number): string {
-  if (day % 10 === 1 && day % 100 !== 11) return `${day}st`
-  if (day % 10 === 2 && day % 100 !== 12) return `${day}nd`
-  if (day % 10 === 3 && day % 100 !== 13) return `${day}rd`
-  return `${day}th`
 }

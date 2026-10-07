@@ -137,14 +137,35 @@ const emptyRule = {
   min_guests: '',
 }
 
-function AddRuleForm({
-  tickets, onAdd, saving,
+type RuleDraft = typeof emptyRule
+
+// A saved rule as form values. Dates come back as ISO timestamps.
+function toRuleDraft(rule: PriceRule): RuleDraft {
+  return {
+    kind: rule.kind,
+    experience_price_id: rule.experience_price_id ?? '',
+    label: rule.label ?? '',
+    unit_amount: rule.unit_amount != null ? String(Number(rule.unit_amount)) : '',
+    percent_off: rule.percent_off != null ? String(Number(rule.percent_off)) : '',
+    book_before: rule.book_before ? rule.book_before.slice(0, 10) : '',
+    days_of_week: rule.days_of_week ?? [],
+    min_guests: rule.min_guests != null ? String(rule.min_guests) : '',
+  }
+}
+
+// Adds a rule, or edits one when `initial` is given. A rule's type and the
+// ticket it applies to can't change after it's created (delete and re-add).
+function RuleForm({
+  tickets, onSubmit, onCancel, saving, initial,
 }: {
   tickets: TicketType[]
-  onAdd: (data: Partial<PriceRule>) => Promise<boolean>
+  onSubmit: (data: Partial<PriceRule>) => Promise<boolean>
+  onCancel?: () => void
   saving: boolean
+  initial?: RuleDraft
 }) {
-  const [rule, setRule] = useState(emptyRule)
+  const editing = !!initial
+  const [rule, setRule] = useState(initial ?? emptyRule)
   const set = (key: keyof typeof emptyRule) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setRule((r) => ({ ...r, [key]: e.target.value }))
   const toggleDay = (day: number) => setRule((r) => ({
@@ -153,20 +174,23 @@ function AddRuleForm({
   }))
 
   const submit = () => {
-    const payload: Partial<PriceRule> = { kind: rule.kind, label: rule.label || undefined }
-    if (rule.experience_price_id) payload.experience_price_id = rule.experience_price_id
+    const payload: Partial<PriceRule> = editing
+      ? { label: rule.label || null }
+      : { kind: rule.kind, label: rule.label || undefined }
+    if (!editing && rule.experience_price_id) payload.experience_price_id = rule.experience_price_id
     if (rule.kind === 'group') {
       payload.min_guests = Number(rule.min_guests)
       payload.percent_off = rule.percent_off
     } else if (rule.kind === 'early_bird') {
       payload.book_before = rule.book_before ? new Date(rule.book_before).toISOString() : undefined
-      if (rule.unit_amount) payload.unit_amount = rule.unit_amount
-      else payload.percent_off = rule.percent_off
+      // A price or a percentage, never both: an edit that switches clears the other.
+      payload.unit_amount = rule.unit_amount || null
+      payload.percent_off = rule.unit_amount ? null : rule.percent_off
     } else {
       payload.days_of_week = rule.days_of_week
       payload.unit_amount = rule.unit_amount
     }
-    return onAdd(payload).then((ok) => ok && setRule(emptyRule))
+    return onSubmit(payload).then((ok) => ok && !editing && setRule(emptyRule))
   }
 
   return (
@@ -174,7 +198,7 @@ function AddRuleForm({
       <Row className="g-2 align-items-end">
         <Col md={3}>
           <Form.Label className="small">Rule</Form.Label>
-          <Form.Select size="sm" value={rule.kind} onChange={set('kind')}>
+          <Form.Select size="sm" value={rule.kind} onChange={set('kind')} disabled={editing}>
             <option value="group">Group discount</option>
             <option value="early_bird">Early-bird price</option>
             <option value="day_of_week">Day-of-week rate</option>
@@ -183,7 +207,7 @@ function AddRuleForm({
         {rule.kind !== 'group' && (
           <Col md={3}>
             <Form.Label className="small">Applies to</Form.Label>
-            <Form.Select size="sm" value={rule.experience_price_id} onChange={set('experience_price_id')}>
+            <Form.Select size="sm" value={rule.experience_price_id} onChange={set('experience_price_id')} disabled={editing}>
               <option value="">All ticket types</option>
               {tickets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </Form.Select>
@@ -226,7 +250,7 @@ function AddRuleForm({
                   key={day}
                   inline
                   type="checkbox"
-                  id={`rule-day-${i}`}
+                  id={`rule-day-${editing ? 'edit' : 'new'}-${i}`}
                   label={day}
                   checked={rule.days_of_week.includes(i)}
                   onChange={() => toggleDay(i)}
@@ -243,8 +267,11 @@ function AddRuleForm({
           <Form.Label className="small">Label (optional)</Form.Label>
           <Form.Control size="sm" placeholder="e.g. Weekend" value={rule.label} onChange={set('label')} />
         </Col>
-        <Col md="auto">
-          <Button size="sm" variant="outline-primary" disabled={saving} onClick={submit}>Add rule</Button>
+        <Col md="auto" className="d-flex gap-2">
+          <Button size="sm" variant={editing ? 'primary' : 'outline-primary'} disabled={saving} onClick={submit}>
+            {editing ? 'Save rule' : 'Add rule'}
+          </Button>
+          {onCancel && <Button size="sm" variant="link" onClick={onCancel}>Cancel</Button>}
         </Col>
       </Row>
     </div>
@@ -255,6 +282,7 @@ function AddRuleForm({
 // these in the booking panel; the server prices every booking from them.
 export default function ExperiencePricingManager({ experienceId }: { experienceId: string }) {
   const queryClient = useQueryClient()
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
   const { data, isLoading } = useQuery({
     queryKey: ['experience-pricing', experienceId],
     queryFn: () => pricingService.get(experienceId),
@@ -359,20 +387,38 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
           <p className="small text-muted fst-italic">No rules.</p>
         ) : (
           <ul className="list-unstyled mb-0">
-            {rules.map((r) => (
+            {rules.map((r) => (editingRuleId === r.id ? (
+              <li key={r.id} className="border-bottom pb-2">
+                <RuleForm
+                  tickets={tickets}
+                  initial={toRuleDraft(r)}
+                  saving={isPending}
+                  onCancel={() => setEditingRuleId(null)}
+                  onSubmit={(d) => run(() => pricingService.updateRule(experienceId, r.id, d)).then((ok) => {
+                    if (ok) setEditingRuleId(null)
+                    return ok
+                  })}
+                />
+              </li>
+            ) : (
               <li key={r.id} className="d-flex justify-content-between align-items-center border-bottom py-2">
                 <span>
                   {r.label && <strong className="me-2">{r.label}</strong>}
                   {describeRule(r, tickets, currency)}
                 </span>
-                <Button size="sm" variant="outline-danger" disabled={isPending} onClick={() => run(() => pricingService.deleteRule(experienceId, r.id))}>
-                  Delete
-                </Button>
+                <span className="text-nowrap">
+                  <Button size="sm" variant="outline-secondary" className="me-2" disabled={isPending} onClick={() => setEditingRuleId(r.id)}>
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="outline-danger" disabled={isPending} onClick={() => run(() => pricingService.deleteRule(experienceId, r.id))}>
+                    Delete
+                  </Button>
+                </span>
               </li>
-            ))}
+            )))}
           </ul>
         )}
-        <AddRuleForm tickets={tickets} saving={isPending} onAdd={(d) => run(() => pricingService.createRule(experienceId, d))} />
+        <RuleForm tickets={tickets} saving={isPending} onSubmit={(d) => run(() => pricingService.createRule(experienceId, d))} />
       </CardBody>
     </Card>
   )
