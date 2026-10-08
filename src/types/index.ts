@@ -122,7 +122,9 @@ export interface Experience {
   duration_minutes?: number
   group_size_min?: number
   group_size_max?: number
-  price_from?: number
+  // Cheapest ticket on sale and its unit; null when there are no ticket types.
+  price_from?: number | null
+  price_unit?: 'per_person' | 'per_booking' | 'per_day' | null
   currency?: string
   status: 'ACTIVE' | 'INACTIVE'
   guide_id: string
@@ -148,6 +150,14 @@ export interface Experience {
   recurrence_end_type?: 'never' | 'on_date' | 'after_occurrences'
   recurrence_end_date?: string
   recurrence_count?: number
+  // IANA zone the schedule's times are in, e.g. "Africa/Lagos".
+  timezone?: string
+  // Session start times each day the schedule runs ("HH:MM:SS"); start_time is the first.
+  start_times?: string[] | null
+  // Recurring only: days each session lasts.
+  length_days?: number | null
+  // Last day of the last session; null when unknown or never ending.
+  schedule_ends_on?: string | null
   is_featured?: boolean
   cover_image_url?: string
   booking_url?: string
