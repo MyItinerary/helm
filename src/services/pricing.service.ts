@@ -85,6 +85,8 @@ export const pricingService = {
 
   createRule: (experienceId: string, data: Partial<PriceRule>) =>
     api.post<PriceRule>(`${base(experienceId)}/price-rules`, data).then((r) => r.data),
+  updateRule: (experienceId: string, id: string, data: Partial<PriceRule>) =>
+    api.patch<PriceRule>(`${base(experienceId)}/price-rules/${id}`, data).then((r) => r.data),
   deleteRule: (experienceId: string, id: string) =>
     api.delete(`${base(experienceId)}/price-rules/${id}`),
 

@@ -10,6 +10,20 @@ import { money } from '@/services/refund.service'
 import StatusBadge from '@/components/ui/StatusBadge'
 import RefundDecisionModal from '@/components/refunds/RefundDecisionModal'
 
+// itin builds every schedule in one time zone (SCHEDULE_TIMEZONE), so show
+// session times there rather than in the admin's browser zone.
+const SESSION_TIME_ZONE = 'Africa/Lagos'
+const sessionFormat = new Intl.DateTimeFormat('en-GB', {
+  timeZone: SESSION_TIME_ZONE,
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+// itin sends naive UTC timestamps (no "Z"), so mark them as UTC before parsing.
+const parseUtc = (value: string) => new Date(/(Z|[+-]\d\d:?\d\d)$/i.test(value) ? value : `${value}Z`)
+
 export default function BookingsPage() {
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState('')
@@ -56,16 +70,18 @@ export default function BookingsPage() {
                   <th>Booking ID</th>
                   <th>User</th>
                   <th>Experience</th>
+                  <th title={`Times in ${SESSION_TIME_ZONE}`}>Session</th>
+                  <th>Guests</th>
                   <th>Amount</th>
                   <th>Status</th>
                   <th>Payment</th>
-                  <th>Date</th>
+                  <th>Booked</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {data?.items.length === 0 && (
-                  <tr><td colSpan={8} className="text-center text-muted py-4">No bookings found</td></tr>
+                  <tr><td colSpan={10} className="text-center text-muted py-4">No bookings found</td></tr>
                 )}
                 {data?.items.map((booking) => (
                   <tr key={booking.id} className="align-middle">
@@ -74,6 +90,10 @@ export default function BookingsPage() {
                     </td>
                     <td className="small">{booking.user?.email ?? booking.user_id}</td>
                     <td className="small">{booking.experience?.title ?? booking.experience_id}</td>
+                    <td className="small text-nowrap">
+                      {booking.requested_datetime ? sessionFormat.format(parseUtc(booking.requested_datetime)) : '—'}
+                    </td>
+                    <td className="small">{booking.party_size ?? '—'}</td>
                     <td>
                       {booking.price_total != null ? money(booking.price_total, booking.currency) : '—'}
                       {Number(booking.refunded_amount ?? 0) > 0 && (

@@ -13,7 +13,9 @@ import { uploadService } from '@/services/upload.service'
 import { searchLocation, type GeocodeResult } from '@/lib/geocoding'
 import { useCategoryOptions } from '@/hooks/use-category-options'
 import type { Experience } from '@/types'
-import { formatRecurrenceSummary, type RecurrenceSummaryInput } from '@/utils/recurrence'
+import {
+  formatRecurrenceSummary, withDerivedMonthFields, type RecurrenceSummaryInput,
+} from '@/utils/recurrence'
 import TagPillSelect from './TagPillSelect'
 import CustomRecurrenceModal, { type RecurrenceFields } from './CustomRecurrenceModal'
 import TimeInput from './TimeInput'
@@ -257,23 +259,36 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         } : undefined,
       }
       if (mode === 'edit' && experienceId) {
-        return experienceService.update(experienceId, payload)
+        // The API only changes fields it receives, so an emptied field has to be
+        // sent as null to clear it; leaving it out would keep the old value.
+        const update = Object.fromEntries(
+          Object.entries(payload).map(([key, value]) => [key, value === undefined ? null : value]),
+        )
+        return experienceService.update(experienceId, update).then((saved) => ({ saved, ticketFailed: false }))
       }
       // A new experience gets a "Standard" ticket at the price entered, so
       // it's bookable straight away; more pricing is managed on the edit page.
-      return experienceService.create(payload).then(async (created) => {
-        if (form.price_from !== '') {
-          await pricingService.createTicket(created.id, {
+      return experienceService.create(payload).then(async (saved) => {
+        if (form.price_from === '') return { saved, ticketFailed: false }
+        try {
+          await pricingService.createTicket(saved.id, {
             label: 'Standard',
             amount: form.price_from,
             pricing_unit: 'per_person',
           })
+          return { saved, ticketFailed: false }
+        } catch {
+          // The experience exists now; reporting the whole save as failed would
+          // make the admin create it a second time.
+          return { saved, ticketFailed: true }
         }
-        return created
       })
     },
-    onSuccess: (saved) => {
+    onSuccess: ({ saved, ticketFailed }) => {
       toast.success(mode === 'edit' ? 'Experience updated' : 'Experience created')
+      if (ticketFailed) {
+        toast.warning("The Standard ticket couldn't be added. Add a ticket type below so customers can book.")
+      }
       queryClient.invalidateQueries({ queryKey: ['experiences'] })
       if (mode === 'edit' && experienceId) {
         queryClient.invalidateQueries({ queryKey: ['experience', experienceId] })
@@ -546,7 +561,14 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
                 <Col md={4}>
                   <Form.Group className="mb-3">
                     <Form.Label>Runs from</Form.Label>
-                    <Form.Control type="date" value={form.recurrence_start_date} onChange={set('recurrence_start_date')} />
+                    <Form.Control
+                      type="date"
+                      value={form.recurrence_start_date}
+                      onChange={(e) => {
+                        const { value } = e.target
+                        setForm((f) => withDerivedMonthFields({ ...f, recurrence_start_date: value }, value))
+                      }}
+                    />
                     <Form.Text className="text-muted">Recurrence is anchored to this date.</Form.Text>
                   </Form.Group>
                 </Col>
