@@ -1,14 +1,14 @@
 'use client'
 
 import {
-  Button, Card, CardBody, Col, Form, ListGroup, Row, Spinner,
+  Button, Card, CardBody, Col, Form, ListGroup, Modal, Row, Spinner,
 } from 'react-bootstrap'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { experienceService } from '@/services/experience.service'
-import { pricingService } from '@/services/pricing.service'
+import { experienceService, orphanedBookings } from '@/services/experience.service'
+import { apiErrorDetail } from '@/services/pricing.service'
 import { uploadService } from '@/services/upload.service'
 import { searchLocation, type GeocodeResult } from '@/lib/geocoding'
 import { useCategoryOptions } from '@/hooks/use-category-options'
@@ -18,6 +18,9 @@ import {
 } from '@/utils/recurrence'
 import TagPillSelect from './TagPillSelect'
 import CustomRecurrenceModal, { type RecurrenceFields } from './CustomRecurrenceModal'
+import {
+  TIMEZONE_OPTIONS, scheduleEndPreview, sessionLengthDays, shortTime,
+} from '@/utils/schedule'
 import TimeInput from './TimeInput'
 import ExperiencePricingManager from './ExperiencePricingManager'
 
@@ -66,7 +69,9 @@ const emptyForm = {
   schedule_type: '',
   event_start_date: '',
   event_end_date: '',
-  start_time: '',
+  start_times: [] as string[],
+  timezone: '',
+  length_days: '1',
   recurrence_type: '',
   recurrence_interval: '1',
   recurrence_days: [] as string[],
@@ -123,7 +128,11 @@ function toFormState(exp?: Partial<Experience>): FormState {
     schedule_type: exp.schedule_type ?? '',
     event_start_date: exp.event_start_date ?? '',
     event_end_date: exp.event_end_date ?? '',
-    start_time: exp.start_time ?? '',
+    // Older experiences only have start_time.
+    start_times: (exp.start_times?.length ? exp.start_times : (exp.start_time ? [exp.start_time] : []))
+      .map(shortTime),
+    timezone: exp.timezone ?? '',
+    length_days: exp.length_days != null ? String(exp.length_days) : '1',
     recurrence_type: exp.recurrence_type ?? '',
     // Legacy rows predate recurrence_interval — a bare weekly/monthly row always meant
     // "every 1"; and predate recurrence_month_mode — the only mode that existed before
@@ -192,8 +201,17 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
   const budgetOptions = categoriesByType.budget_level ?? []
   const comfortOptions = categoriesByType.comfort_level ?? []
 
+  // Sessions lasting several days can only start at one time.
+  const multiDay = sessionLengthDays(form) > 1
+  const sessionTimes = (multiDay ? form.start_times.slice(0, 1) : form.start_times)
+    .filter(Boolean)
+    .filter((t, i, all) => all.indexOf(t) === i)
+    .sort()
+  // Upcoming bookings the last save would strand; the admin is asked to confirm.
+  const [strandedBookings, setStrandedBookings] = useState<number | null>(null)
+
   const { mutate, isPending } = useMutation({
-    mutationFn: () => {
+    mutationFn: ({ confirm = false }: { confirm?: boolean } = {}) => {
       const payload = {
         title: form.title,
         headline: form.headline || undefined,
@@ -216,7 +234,14 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         schedule_type: form.schedule_type || undefined,
         event_start_date: form.schedule_type === 'one_off' ? (form.event_start_date || undefined) : undefined,
         event_end_date: form.schedule_type === 'one_off' ? (form.event_end_date || undefined) : undefined,
-        start_time: form.schedule_type ? (form.start_time || undefined) : undefined,
+        // The API keeps start_time (read by older apps) in step with start_times;
+        // listed here so clearing the schedule clears it too.
+        start_time: undefined,
+        start_times: form.schedule_type && sessionTimes.length ? sessionTimes : undefined,
+        // Blank: the API uses the country's zone.
+        timezone: form.timezone || undefined,
+        length_days: form.schedule_type === 'recurring' && form.length_days
+          ? Number(form.length_days) : undefined,
         recurrence_type: form.schedule_type === 'recurring' ? (form.recurrence_type || undefined) : undefined,
         recurrence_interval: form.schedule_type === 'recurring' && form.recurrence_interval
           ? Number(form.recurrence_interval) : undefined,
@@ -264,31 +289,21 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         const update = Object.fromEntries(
           Object.entries(payload).map(([key, value]) => [key, value === undefined ? null : value]),
         )
-        return experienceService.update(experienceId, update).then((saved) => ({ saved, ticketFailed: false }))
+        return experienceService.update(experienceId, update, { confirm })
       }
-      // A new experience gets a "Standard" ticket at the price entered, so
-      // it's bookable straight away; more pricing is managed on the edit page.
-      return experienceService.create(payload).then(async (saved) => {
-        if (form.price_from === '') return { saved, ticketFailed: false }
-        try {
-          await pricingService.createTicket(saved.id, {
-            label: 'Standard',
-            amount: form.price_from,
-            pricing_unit: 'per_person',
-          })
-          return { saved, ticketFailed: false }
-        } catch {
-          // The experience exists now; reporting the whole save as failed would
-          // make the admin create it a second time.
-          return { saved, ticketFailed: true }
-        }
+      // A new experience gets a "Standard" ticket at the price entered, in the
+      // same request, so it's bookable straight away (and a failed ticket can't
+      // leave a half-created experience). More pricing is on the edit page.
+      return experienceService.create({
+        ...payload,
+        prices: form.price_from !== ''
+          ? [{ label: 'Standard', amount: form.price_from, pricing_unit: 'per_person' }]
+          : undefined,
       })
     },
-    onSuccess: ({ saved, ticketFailed }) => {
+    onSuccess: (saved) => {
+      setStrandedBookings(null)
       toast.success(mode === 'edit' ? 'Experience updated' : 'Experience created')
-      if (ticketFailed) {
-        toast.warning("The Standard ticket couldn't be added. Add a ticket type below so customers can book.")
-      }
       queryClient.invalidateQueries({ queryKey: ['experiences'] })
       if (mode === 'edit' && experienceId) {
         queryClient.invalidateQueries({ queryKey: ['experience', experienceId] })
@@ -297,7 +312,14 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         router.push(`/experiences/${saved.id}/edit`)
       }
     },
-    onError: () => toast.error(mode === 'edit' ? 'Failed to update experience' : 'Failed to create experience'),
+    onError: (error) => {
+      const stranded = orphanedBookings(error)
+      if (stranded != null) {
+        setStrandedBookings(stranded)
+        return
+      }
+      toast.error(apiErrorDetail(error, mode === 'edit' ? 'Failed to update experience' : 'Failed to create experience'))
+    },
   })
 
   const set = (field: keyof FormState) => (
@@ -315,6 +337,16 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
   ) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
   const setMulti = (field: 'interest_tags' | 'social_style') => (next: string[]) => setForm((f) => ({ ...f, [field]: next }))
+
+  const setStartTime = (index: number, next: string) => setForm((f) => {
+    const times = f.start_times.length ? [...f.start_times] : ['']
+    times[index] = next
+    return { ...f, start_times: times }
+  })
+  const addStartTime = () => setForm((f) => ({ ...f, start_times: [...(f.start_times.length ? f.start_times : ['']), ''] }))
+  const removeStartTime = (index: number) => setForm((f) => ({
+    ...f, start_times: f.start_times.filter((_, i) => i !== index),
+  }))
 
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false)
   const recurrenceFields: RecurrenceFields = {
@@ -547,13 +579,85 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           </Row>
           {(form.schedule_type === 'one_off' || form.schedule_type === 'recurring') && (
             <Row>
-              <Col md={4}>
+              <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Start time</Form.Label>
-                  <TimeInput value={form.start_time} onChange={(next) => setForm((f) => ({ ...f, start_time: next }))} />
+                  <Form.Label>{multiDay ? 'Start time' : 'Start times'}</Form.Label>
+                  {(form.start_times.length ? form.start_times : ['']).map((time, index) => (
+                    // Index keys: rows have no identity beyond their position.
+                    // eslint-disable-next-line react/no-array-index-key
+                    <div key={index} className="d-flex align-items-center gap-2 mb-2">
+                      <TimeInput value={time} onChange={(next) => setStartTime(index, next)} />
+                      {form.start_times.length > 1 && !(multiDay && index === 0) && (
+                        <Button
+                          type="button"
+                          variant="outline-danger"
+                          size="sm"
+                          aria-label="Remove time"
+                          onClick={() => removeStartTime(index)}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  {multiDay ? (
+                    form.start_times.length > 1 && (
+                      <Form.Text className="text-danger d-block">
+                        Sessions lasting several days can only start at one time; only the first is saved.
+                      </Form.Text>
+                    )
+                  ) : (
+                    <Button type="button" variant="outline-secondary" size="sm" onClick={addStartTime}>
+                      Add another time
+                    </Button>
+                  )}
+                  <Form.Text className="text-muted d-block">
+                    Each time is a separate session with its own seats.
+                  </Form.Text>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Time zone</Form.Label>
+                  <Form.Select value={form.timezone} onChange={setSelect('timezone')}>
+                    <option value="">From the country</option>
+                    {form.timezone && !TIMEZONE_OPTIONS.some((o) => o.id === form.timezone) && (
+                      <option value={form.timezone}>{form.timezone}</option>
+                    )}
+                    {TIMEZONE_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </Form.Select>
+                  <Form.Text className="text-muted">Times above are local times in this zone.</Form.Text>
                 </Form.Group>
               </Col>
             </Row>
+          )}
+          {form.schedule_type === 'recurring' && (
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Each session lasts</Form.Label>
+                  <div className="d-flex align-items-center gap-2">
+                    <Form.Control
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={form.length_days}
+                      onChange={set('length_days')}
+                      style={{ maxWidth: 100 }}
+                    />
+                    <span>day{Number(form.length_days) === 1 ? '' : 's'}</span>
+                  </div>
+                  <Form.Text className="text-muted">One booking covers every day, from the start date.</Form.Text>
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
+          {scheduleEndPreview(form) && (
+            <p className="text-muted small mb-3">
+              {scheduleEndPreview(form)}
+              {mode === 'edit' && initialValues?.schedule_ends_on
+                && ` · currently ends ${initialValues.schedule_ends_on}`}
+            </p>
           )}
           {form.schedule_type === 'recurring' && (
             <>
@@ -778,7 +882,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           </Row>
 
           <div className="d-flex gap-2 pt-2">
-            <Button variant="primary" disabled={!form.title || isPending} onClick={() => mutate()}>
+            <Button variant="primary" disabled={!form.title || isPending} onClick={() => mutate({})}>
               {isPending ? <Spinner size="sm" /> : (mode === 'edit' ? 'Save changes' : 'Create')}
             </Button>
             <Button variant="outline-secondary" onClick={() => router.back()}>Cancel</Button>
@@ -787,6 +891,23 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
       </Card>
 
       {mode === 'edit' && experienceId && <ExperiencePricingManager experienceId={experienceId} />}
+
+      <Modal show={strandedBookings != null} onHide={() => setStrandedBookings(null)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Bookings would lose their session</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {strandedBookings} upcoming booking{strandedBookings === 1 ? ' is' : 's are'} on a session this change
+          removes or moves. {strandedBookings === 1 ? 'It keeps' : 'They keep'} the old time, which won&apos;t be on
+          the schedule any more. Contact the customers or cancel those bookings before saving, or save anyway.
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setStrandedBookings(null)}>Go back</Button>
+          <Button variant="danger" disabled={isPending} onClick={() => mutate({ confirm: true })}>
+            {isPending ? <Spinner size="sm" /> : 'Save anyway'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   )
 }

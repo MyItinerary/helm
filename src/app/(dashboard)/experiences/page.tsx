@@ -15,6 +15,7 @@ import { experienceService } from '@/services/experience.service'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { formatRecurrenceSummary } from '@/utils/recurrence'
 import { formatTime12h } from '@/utils/time'
+import { formatPriceFrom, formatTimes, timezoneLabel } from '@/utils/schedule'
 
 function ViewExperienceModal({ experienceId, onClose }: { experienceId: string | null; onClose: () => void }) {
   const { data, isLoading } = useQuery({
@@ -58,11 +59,20 @@ function ViewExperienceModal({ experienceId, onClose }: { experienceId: string |
                 <>
                   One-off: {data.event_start_date}
                   {data.event_end_date && ` – ${data.event_end_date}`}
-                  {data.start_time && ` at ${formatTime12h(data.start_time)}`}
+                  {data.start_time && !data.start_times?.length && ` at ${formatTime12h(data.start_time)}`}
                 </>
               )}
               {data.schedule_type === 'recurring' && (
                 data.recurrence_type ? formatRecurrenceSummary(data) : 'Recurring — no pattern set'
+              )}
+              {data.schedule_type && data.start_times?.length ? ` · ${formatTimes(data.start_times)}` : null}
+              {data.schedule_type === 'recurring' && (data.length_days ?? 1) > 1
+                && ` · each session lasts ${data.length_days} days`}
+              {data.schedule_type && (
+                <span className="d-block text-muted small">
+                  Time zone: {timezoneLabel(data.timezone)}
+                  {data.schedule_ends_on && ` · last day ${data.schedule_ends_on}`}
+                </span>
               )}
             </p>
 
@@ -70,7 +80,7 @@ function ViewExperienceModal({ experienceId, onClose }: { experienceId: string |
             <Row className="mb-3">
               <Col md={4}>
                 <strong>Price from:</strong>{' '}
-                {data.price_from != null ? `${data.currency ?? 'USD'} ${data.price_from}` : '—'}
+                {formatPriceFrom(data)}
               </Col>
               <Col md={4}><strong>Duration:</strong> {data.duration_minutes ?? '—'} min</Col>
               <Col md={4}><strong>Max group size:</strong> {data.group_size_max ?? '—'}</Col>
@@ -256,7 +266,7 @@ export default function ExperiencesPage() {
                     </td>
                     <td className="text-muted small">{exp.guide?.display_name ?? exp.guide_id}</td>
                     <td>{[exp.city, exp.country].filter(Boolean).join(', ') || '—'}</td>
-                    <td>{exp.price_from != null ? `${exp.currency ?? 'USD'} ${exp.price_from}` : '—'}</td>
+                    <td>{formatPriceFrom(exp)}</td>
                     <td><StatusBadge status={exp.status} /></td>
                     <td className="text-muted small">{new Date(exp.created_at).toLocaleDateString()}</td>
                     <td>
