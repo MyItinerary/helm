@@ -83,7 +83,7 @@ function ViewExperienceModal({ experienceId, onClose }: { experienceId: string |
                 {formatPriceFrom(data)}
               </Col>
               <Col md={4}><strong>Duration:</strong> {data.duration_minutes ?? '—'} min</Col>
-              <Col md={4}><strong>Max group size:</strong> {data.group_size_max ?? '—'}</Col>
+              <Col md={4}><strong>Group size:</strong> {data.group_size_min ?? 1}–{data.group_size_max ?? 'any'}</Col>
             </Row>
 
             <h6 className="text-uppercase text-muted small mb-2 mt-3">Experience Tags</h6>

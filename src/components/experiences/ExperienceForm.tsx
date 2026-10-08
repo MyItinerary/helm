@@ -59,6 +59,7 @@ const emptyForm = {
   currency: 'NGN',
   duration_hours: '',
   duration_mins: '',
+  group_size_min: '',
   group_size_max: '',
   interest_tags: [] as string[],
   energy_level: '',
@@ -118,6 +119,7 @@ function toFormState(exp?: Partial<Experience>): FormState {
     currency: exp.currency ?? 'NGN',
     duration_hours: exp.duration_minutes != null ? String(Math.floor(exp.duration_minutes / 60)) : '',
     duration_mins: exp.duration_minutes != null ? String(exp.duration_minutes % 60) : '',
+    group_size_min: exp.group_size_min != null ? String(exp.group_size_min) : '',
     group_size_max: exp.group_size_max != null ? String(exp.group_size_max) : '',
     interest_tags: exp.interest_tags ?? [],
     energy_level: exp.energy_level ?? '',
@@ -207,6 +209,9 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
     .filter(Boolean)
     .filter((t, i, all) => all.indexOf(t) === i)
     .sort()
+  const minGuests = Number(form.group_size_min || 1)
+  const groupSizeInvalid = !Number.isInteger(minGuests) || minGuests < 1
+    || (!!form.group_size_max && minGuests > Number(form.group_size_max))
   // Upcoming bookings the last save would strand; the admin is asked to confirm.
   const [strandedBookings, setStrandedBookings] = useState<number | null>(null)
 
@@ -224,6 +229,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         duration_minutes: (form.duration_hours || form.duration_mins)
           ? Number(form.duration_hours || 0) * 60 + Number(form.duration_mins || 0)
           : undefined,
+        group_size_min: form.group_size_min ? Number(form.group_size_min) : undefined,
         group_size_max: form.group_size_max ? Number(form.group_size_max) : undefined,
         interest_tags: form.interest_tags.length ? form.interest_tags : undefined,
         energy_level: form.energy_level || undefined,
@@ -539,6 +545,24 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             </Col>
           </Row>
           <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Min group size</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={1}
+                  max={form.group_size_max || undefined}
+                  placeholder="1"
+                  value={form.group_size_min}
+                  onChange={set('group_size_min')}
+                  isInvalid={groupSizeInvalid}
+                />
+                <Form.Control.Feedback type="invalid">Must be between 1 and the max group size.</Form.Control.Feedback>
+                <Form.Text muted>
+                  Bookings with fewer guests are blocked. Leave blank to allow 1 guest. For a group discount, use Pricing → Group discount.
+                </Form.Text>
+              </Form.Group>
+            </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Max group size</Form.Label>
@@ -882,7 +906,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           </Row>
 
           <div className="d-flex gap-2 pt-2">
-            <Button variant="primary" disabled={!form.title || isPending} onClick={() => mutate({})}>
+            <Button variant="primary" disabled={!form.title || groupSizeInvalid || isPending} onClick={() => mutate({})}>
               {isPending ? <Spinner size="sm" /> : (mode === 'edit' ? 'Save changes' : 'Create')}
             </Button>
             <Button variant="outline-secondary" onClick={() => router.back()}>Cancel</Button>
