@@ -89,3 +89,21 @@ export function formatPriceFrom(exp: { price_from?: number | null; price_unit?: 
   if (exp.price_from == null) return '—'
   return `${exp.currency ?? 'USD'} ${exp.price_from}${UNIT_SUFFIX[exp.price_unit ?? ''] ?? ''}`
 }
+
+// itin sends naive UTC timestamps (no "Z"), so mark them as UTC before parsing.
+export const parseUtc = (value: string) => new Date(/(Z|[+-]\d\d:?\d\d)$/i.test(value) ? value : `${value}Z`)
+
+/** A UTC session time as wall-clock time in the zone the session runs in. */
+export function formatSessionTime(value: string, timeZone = 'Africa/Lagos'): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(parseUtc(value))
+}
+
+/** "2026-10-31" -> "Sat 31 Oct 2026" */
+export const formatLocalDate = (value: string) => format(parseISO(value), 'EEE d MMM yyyy')

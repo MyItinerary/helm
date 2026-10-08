@@ -185,11 +185,16 @@ export interface Booking {
   payment_provider?: 'stripe' | 'paystack'
   // When the session starts (UTC). Null for bookings with no set time.
   requested_datetime?: string | null
+  // When the session (all its days) ends (UTC), and the zone it runs in.
+  session_end_at?: string | null
+  session_timezone?: string | null
   party_size?: number | null
   created_at: string
   user?: Pick<User, 'id' | 'email'>
   guide?: Pick<Guide, 'id' | 'display_name'>
   experience?: Pick<Experience, 'id' | 'title'>
+  // Sent by itin with every booking.
+  experience_title?: string | null
 }
 
 export interface Payment {

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'
 import { Spinner } from 'react-bootstrap'
 import ExperienceForm from '@/components/experiences/ExperienceForm'
+import BlockedDatesManager from '@/components/availability/BlockedDatesManager'
 import { experienceService } from '@/services/experience.service'
 
 export default function EditExperiencePage() {
@@ -21,5 +22,10 @@ export default function EditExperiencePage() {
     return <p className="text-muted">Experience not found.</p>
   }
 
-  return <ExperienceForm mode="edit" experienceId={params.id} initialValues={data} />
+  return (
+    <>
+      <ExperienceForm mode="edit" experienceId={params.id} initialValues={data} />
+      <BlockedDatesManager experienceId={params.id} />
+    </>
+  )
 }

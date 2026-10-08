@@ -5,7 +5,7 @@ import {
 } from 'react-bootstrap'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faSearch, faPlus, faXmark, faEye, faPencil,
+  faSearch, faPlus, faXmark, faEye, faPencil, faCalendarDays,
 } from '@fortawesome/free-solid-svg-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
@@ -281,6 +281,9 @@ export default function ExperiencesPage() {
                         </button>
                         <Link href={`/experiences/${exp.id}/edit`} className="btn btn-sm btn-outline-secondary" title="Edit">
                           <FontAwesomeIcon icon={faPencil} />
+                        </Link>
+                        <Link href={`/experiences/${exp.id}/sessions`} className="btn btn-sm btn-outline-secondary" title="Sessions and seats">
+                          <FontAwesomeIcon icon={faCalendarDays} />
                         </Link>
                         <button
                           type="button"
