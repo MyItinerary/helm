@@ -59,6 +59,8 @@ export interface User {
   is_temp: boolean
   created_at: string
   updated_at: string
+  /** Set once the account was deleted and its personal details removed. */
+  anonymised_at?: string | null
 }
 
 export interface UserDetail extends User {
