@@ -10,23 +10,63 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { userService } from '@/services/user.service'
+import { userService, type DeletionBlockers } from '@/services/user.service'
 import StatusBadge from '@/components/ui/StatusBadge'
 import type { User } from '@/types'
 
 type SignupType = 'traveller' | 'guide' | 'both'
 
+/** What an admin has to sort out before the account can be deleted. */
+function blockerLines(blockers: DeletionBlockers): string[] {
+  const lines: string[] = []
+  if (blockers.upcoming_bookings) lines.push(`${blockers.upcoming_bookings} upcoming booking(s) as a traveller: cancel them in Bookings.`)
+  if (blockers.open_refund_requests) lines.push(`${blockers.open_refund_requests} refund request(s) waiting: resolve them in Refunds.`)
+  if (blockers.hosted_upcoming_bookings) lines.push(`${blockers.hosted_upcoming_bookings} upcoming booking(s) on their experiences: cancel or wait for them to finish.`)
+  if (blockers.pending_payouts) lines.push(`${blockers.pending_payouts} booking(s) with a payout not yet settled: settle them in Payments & Payouts.`)
+  return lines
+}
+
 function ViewUserModal({ userId, onClose }: { userId: string | null; onClose: () => void }) {
+  const queryClient = useQueryClient()
   const { data, isLoading } = useQuery({
     queryKey: ['user', userId],
     queryFn: () => userService.get(userId as string),
     enabled: !!userId,
   })
+  const [confirming, setConfirming] = useState(false)
+  const [blockers, setBlockers] = useState<string[]>([])
+
+  const close = () => {
+    setConfirming(false)
+    setBlockers([])
+    onClose()
+  }
+
+  const { mutate: deleteAccount, isPending: deleting } = useMutation({
+    mutationFn: () => userService.delete(userId as string),
+    onSuccess: () => {
+      toast.success('Account deleted: personal details removed, booking and payment records kept')
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['user', userId] })
+      close()
+    },
+    onError: (error) => {
+      const response = (error as { response?: { status?: number; data?: { detail?: unknown; blockers?: DeletionBlockers } } }).response
+      if (response?.status === 409 && response.data?.blockers) {
+        setBlockers(blockerLines(response.data.blockers))
+        return
+      }
+      toast.error(typeof response?.data?.detail === 'string' ? response.data.detail : 'Failed to delete the account')
+    },
+  })
 
   return (
-    <Modal show={!!userId} onHide={onClose} centered size="lg">
+    <Modal show={!!userId} onHide={close} centered size="lg">
       <Modal.Header closeButton>
-        <Modal.Title>{data?.profile?.full_name || data?.email || 'User'}</Modal.Title>
+        <Modal.Title>
+          {data?.profile?.full_name || data?.email || 'User'}
+          {data?.anonymised_at && <span className="badge bg-secondary ms-2 align-middle fs-6">Deleted</span>}
+        </Modal.Title>
       </Modal.Header>
       <Modal.Body>
         {isLoading ? (
@@ -70,11 +110,47 @@ function ViewUserModal({ userId, onClose }: { userId: string | null; onClose: ()
                 </Row>
               </>
             )}
+
+            {data.anonymised_at && (
+              <p className="text-muted small mt-3 mb-0">
+                This account was deleted on {new Date(data.anonymised_at).toLocaleDateString()}. Personal details were removed; its bookings and payment records are kept.
+              </p>
+            )}
+
+            {confirming && (
+              <div className="alert alert-danger mt-3 mb-0">
+                <strong>Delete this account?</strong>
+                <p className="mb-2 mt-1">
+                  The user&apos;s personal details (name, email, phone, sign-in, saved lists) are removed for good and they can no longer sign in. Their bookings, payments and refunds are kept, without those details, for compliance, refunds and disputes.
+                </p>
+                {blockers.length > 0 && (
+                  <>
+                    <p className="mb-1"><strong>This account can&apos;t be deleted yet:</strong></p>
+                    <ul className="mb-2">
+                      {blockers.map((line) => <li key={line}>{line}</li>)}
+                    </ul>
+                  </>
+                )}
+                <div className="d-flex gap-2">
+                  <Button variant="danger" size="sm" disabled={deleting} onClick={() => { setBlockers([]); deleteAccount() }}>
+                    {deleting ? <Spinner size="sm" /> : blockers.length > 0 ? 'Try again' : 'Yes, delete account'}
+                  </Button>
+                  <Button variant="outline-secondary" size="sm" disabled={deleting} onClick={() => { setConfirming(false); setBlockers([]) }}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="outline-secondary" onClick={onClose}>Close</Button>
+        {data && !data.anonymised_at && !confirming && (
+          <Button variant="outline-danger" className="me-auto" onClick={() => setConfirming(true)}>
+            Delete account…
+          </Button>
+        )}
+        <Button variant="outline-secondary" onClick={close}>Close</Button>
       </Modal.Footer>
     </Modal>
   )
@@ -267,7 +343,11 @@ export default function UsersPage() {
                 )}
                 {data?.items.map((user) => (
                   <tr key={user.id} className="align-middle">
-                    <td>{user.email}</td>
+                    <td>
+                      {user.anonymised_at
+                        ? <span className="text-muted fst-italic">Deleted account</span>
+                        : user.email}
+                    </td>
                     <td>
                       <span className="badge bg-light text-dark text-capitalize">{user.signup_type}</span>
                     </td>
