@@ -381,7 +381,7 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
 
         <h6 className="mt-4">Pricing rules</h6>
         <p className="small text-muted">
-          Group discounts, early-bird prices and weekday/weekend rates. A group discount counts every ticket type together. Early-bird combines with a group discount or promo code (they&apos;re taken off the early-bird price), but a promo code and a group discount don&apos;t stack: the customer gets the better one. A group discount doesn&apos;t stop smaller bookings; for that, set the experience&apos;s min group size.
+          Group discounts, early-bird prices and weekday/weekend rates. Discounts don&apos;t stack: the customer gets the single biggest one they qualify for (early-bird, group or promo code). A group discount counts every ticket type together, and doesn&apos;t stop smaller bookings; for that, set the experience&apos;s min group size.
         </p>
         {rules.length === 0 ? (
           <p className="small text-muted fst-italic">No rules.</p>
