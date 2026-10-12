@@ -162,6 +162,8 @@ export interface Experience {
   schedule_ends_on?: string | null
   is_featured?: boolean
   cover_image_url?: string
+  // Every photo, in display order; the first is the cover.
+  images?: string[]
   booking_url?: string
   what_you_will_do?: string[]
   whats_included?: string[]
