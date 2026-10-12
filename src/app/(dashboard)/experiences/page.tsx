@@ -17,6 +17,20 @@ import { formatRecurrenceSummary } from '@/utils/recurrence'
 import { formatTime12h } from '@/utils/time'
 import { formatPriceFrom, formatTimes, timezoneLabel } from '@/utils/schedule'
 
+function ExperiencePhotos({ urls }: { urls: string[] }) {
+  if (!urls.length) return <p className="text-muted small mb-2">No photos.</p>
+  return (
+    <div className="d-flex flex-wrap gap-2 mb-2">
+      {urls.map((url, i) => (
+        <a key={url} href={url} target="_blank" rel="noreferrer" title={i === 0 ? 'Cover photo' : `Photo ${i + 1}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={i === 0 ? 'Cover photo' : `Photo ${i + 1}`} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 4 }} />
+        </a>
+      ))}
+    </div>
+  )
+}
+
 function ViewExperienceModal({ experienceId, onClose }: { experienceId: string | null; onClose: () => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['experience', experienceId],
@@ -147,9 +161,8 @@ function ViewExperienceModal({ experienceId, onClose }: { experienceId: string |
             )}
 
             <h6 className="text-uppercase text-muted small mb-2 mt-3">Media &amp; Links</h6>
+            <ExperiencePhotos urls={data.images?.length ? data.images : (data.cover_image_url ? [data.cover_image_url] : [])} />
             <p className="mb-0">
-              Cover: {data.cover_image_url ? <a href={data.cover_image_url} target="_blank" rel="noreferrer">link</a> : '—'}
-              {' · '}
               Booking: {data.booking_url ? <a href={data.booking_url} target="_blank" rel="noreferrer">link</a> : '—'}
             </p>
           </>

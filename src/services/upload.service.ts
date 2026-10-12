@@ -30,4 +30,19 @@ async function uploadToCloudinary(file: File): Promise<string> {
   return data.secure_url
 }
 
-export const uploadService = { uploadToCloudinary }
+export interface UploadResult {
+  file: File
+  // Missing when that file's upload failed.
+  url?: string
+}
+
+// Uploads together; one failed file doesn't stop the others. Results keep the order given.
+async function uploadManyToCloudinary(files: File[]): Promise<UploadResult[]> {
+  const settled = await Promise.allSettled(files.map((file) => uploadToCloudinary(file)))
+  return settled.map((result, i) => ({
+    file: files[i],
+    url: result.status === 'fulfilled' ? result.value : undefined,
+  }))
+}
+
+export const uploadService = { uploadToCloudinary, uploadManyToCloudinary }

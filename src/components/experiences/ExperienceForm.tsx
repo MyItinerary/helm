@@ -9,7 +9,6 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { experienceService, orphanedBookings } from '@/services/experience.service'
 import { apiErrorDetail } from '@/services/pricing.service'
-import { uploadService } from '@/services/upload.service'
 import { searchLocation, type GeocodeResult } from '@/lib/geocoding'
 import { useCategoryOptions } from '@/hooks/use-category-options'
 import type { Experience } from '@/types'
@@ -23,6 +22,7 @@ import {
 } from '@/utils/schedule'
 import TimeInput from './TimeInput'
 import ExperiencePricingManager from './ExperiencePricingManager'
+import ExperienceImagesField from './ExperienceImagesField'
 
 // interest_tags is a free-form Postgres array server-side, so any ids here are safe to add.
 const INTEREST_OPTIONS = [
@@ -96,7 +96,7 @@ const emptyForm = {
   safety_notes: '',
   mobility_accessibility: '',
   emergency_guidance: '',
-  cover_image_url: '',
+  images: [] as string[],
   booking_url: '',
 }
 
@@ -164,7 +164,8 @@ function toFormState(exp?: Partial<Experience>): FormState {
     safety_notes: joinLines(exp.safety_info?.notes),
     mobility_accessibility: exp.safety_info?.mobilityAccessibility ?? '',
     emergency_guidance: exp.safety_info?.emergencyGuidance ?? '',
-    cover_image_url: exp.cover_image_url ?? '',
+    // Older experiences only have a cover.
+    images: exp.images?.length ? exp.images : (exp.cover_image_url ? [exp.cover_image_url] : []),
     booking_url: exp.booking_url ?? '',
   }
 }
@@ -271,7 +272,9 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         recurrence_count: form.schedule_type === 'recurring' && form.recurrence_end_type === 'after_occurrences' && form.recurrence_count
           ? Number(form.recurrence_count) : undefined,
         is_featured: form.is_featured,
-        cover_image_url: form.cover_image_url || undefined,
+        // The first photo is the cover. An empty list clears the photos.
+        cover_image_url: form.images[0] || undefined,
+        images: form.images,
         booking_url: form.booking_url || undefined,
         what_you_will_do: lines(form.what_you_will_do).length ? lines(form.what_you_will_do) : undefined,
         whats_included: lines(form.whats_included).length ? lines(form.whats_included) : undefined,
@@ -405,23 +408,8 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
     setShowLocationResults(false)
   }
 
-  const [isUploadingImage, setIsUploadingImage] = useState(false)
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setIsUploadingImage(true)
-    try {
-      const url = await uploadService.uploadToCloudinary(file)
-      setForm((f) => ({ ...f, cover_image_url: url }))
-      toast.success('Image uploaded')
-    } catch {
-      toast.error('Image upload failed')
-    } finally {
-      setIsUploadingImage(false)
-      e.target.value = ''
-    }
-  }
+  const [isUploadingImages, setIsUploadingImages] = useState(false)
+  const setImages = (update: (prev: string[]) => string[]) => setForm((f) => ({ ...f, images: update(f.images) }))
 
   return (
     <div>
@@ -882,19 +870,8 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Media &amp; Links</h6>
           <Row>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Cover image</Form.Label>
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  {form.cover_image_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={form.cover_image_url} alt="Cover preview" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 4 }} />
-                  )}
-                  <Form.Control type="file" accept="image/*" onChange={handleImageUpload} disabled={isUploadingImage} />
-                  {isUploadingImage && <Spinner size="sm" />}
-                </div>
-                <Form.Control value={form.cover_image_url} onChange={set('cover_image_url')} placeholder="https://… (or upload a file above)" />
-              </Form.Group>
+            <Col md={12}>
+              <ExperienceImagesField images={form.images} onChange={setImages} onUploadingChange={setIsUploadingImages} />
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
@@ -906,7 +883,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           </Row>
 
           <div className="d-flex gap-2 pt-2">
-            <Button variant="primary" disabled={!form.title || groupSizeInvalid || isPending} onClick={() => mutate({})}>
+            <Button variant="primary" disabled={!form.title || groupSizeInvalid || isPending || isUploadingImages} onClick={() => mutate({})}>
               {isPending ? <Spinner size="sm" /> : (mode === 'edit' ? 'Save changes' : 'Create')}
             </Button>
             <Button variant="outline-secondary" onClick={() => router.back()}>Cancel</Button>
@@ -927,7 +904,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={() => setStrandedBookings(null)}>Go back</Button>
-          <Button variant="danger" disabled={isPending} onClick={() => mutate({ confirm: true })}>
+          <Button variant="danger" disabled={isPending || isUploadingImages} onClick={() => mutate({ confirm: true })}>
             {isPending ? <Spinner size="sm" /> : 'Save anyway'}
           </Button>
         </Modal.Footer>
