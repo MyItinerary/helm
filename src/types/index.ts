@@ -171,8 +171,17 @@ export interface Experience {
   requirements?: ExperienceRequirements
   safety_info?: SafetyInfo
   cancellation_policy?: string
+  // Shown to travellers only once they've booked.
+  meeting_instructions?: string | null
+  what_to_bring?: string | null
+  itinerary?: ItineraryStep[] | null
   created_at: string
   updated_at?: string
+}
+
+export interface ItineraryStep {
+  title: string
+  description?: string | null
 }
 
 export interface Booking {
