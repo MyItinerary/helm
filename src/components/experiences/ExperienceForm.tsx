@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  Button, Card, CardBody, Col, Form, ListGroup, Modal, Row, Spinner,
+  Alert, Button, Card, CardBody, Col, Form, ListGroup, Modal, Row, Spinner,
 } from 'react-bootstrap'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
@@ -312,13 +312,13 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
     },
     onSuccess: (saved) => {
       setStrandedBookings(null)
-      toast.success(mode === 'edit' ? 'Experience updated' : 'Experience created')
+      toast.success(mode === 'edit' ? 'Experience updated' : 'Experience created: now add ticket types and discounts')
       queryClient.invalidateQueries({ queryKey: ['experiences'] })
       if (mode === 'edit' && experienceId) {
         queryClient.invalidateQueries({ queryKey: ['experience', experienceId] })
         router.push('/experiences')
       } else {
-        router.push(`/experiences/${saved.id}/edit`)
+        router.push(`/experiences/${saved.id}/edit#pricing`)
       }
     },
     onError: (error) => {
@@ -497,14 +497,22 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             </Col>
           </Row>
 
-          <h6 className="text-uppercase text-muted small mb-3 mt-4">Pricing &amp; Logistics</h6>
+          <div className="d-flex justify-content-between align-items-baseline mb-3 mt-4">
+            <h6 className="text-uppercase text-muted small mb-0">Pricing &amp; Logistics</h6>
+            {mode === 'edit' && <a href="#pricing" className="small">Ticket types, add-ons &amp; discounts ↓</a>}
+          </div>
+          {mode !== 'edit' && (
+            <Alert variant="info" className="small py-2">
+              Ticket types, add-ons and discounts (group, early-bird, weekday rates) are set after you click Create. You&apos;ll go straight to them.
+            </Alert>
+          )}
           <Row>
             {mode !== 'edit' && (
               <Col md={4}>
                 <Form.Group className="mb-3">
                   <Form.Label>Standard ticket price</Form.Label>
                   <Form.Control type="number" min={0} value={form.price_from} onChange={set('price_from')} />
-                  <Form.Text className="text-muted">Per person. Add ticket types, add-ons and rules after creating.</Form.Text>
+                  <Form.Text className="text-muted">Per person. Becomes the Standard ticket type.</Form.Text>
                 </Form.Group>
               </Col>
             )}
@@ -547,7 +555,10 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
                 />
                 <Form.Control.Feedback type="invalid">Must be between 1 and the max group size.</Form.Control.Feedback>
                 <Form.Text muted>
-                  Bookings with fewer guests are blocked. Leave blank to allow 1 guest. For a group discount, use Pricing → Group discount.
+                  Bookings with fewer guests are blocked. Leave blank to allow 1 guest.{' '}
+                  {mode === 'edit'
+                    ? <>For a group discount, use <a href="#pricing">Discounts &amp; pricing rules</a>.</>
+                    : 'Add a group discount after creating.'}
                 </Form.Text>
               </Form.Group>
             </Col>

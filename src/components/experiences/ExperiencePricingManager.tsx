@@ -1,10 +1,10 @@
 'use client'
 
 import {
-  Badge, Button, Card, CardBody, Col, Form, Row, Spinner, Table,
+  Alert, Badge, Button, Card, CardBody, Col, Form, Row, Spinner, Table,
 } from 'react-bootstrap'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   apiErrorDetail, pricingService,
@@ -283,10 +283,19 @@ function RuleForm({
 export default function ExperiencePricingManager({ experienceId }: { experienceId: string }) {
   const queryClient = useQueryClient()
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['experience-pricing', experienceId],
     queryFn: () => pricingService.get(experienceId),
   })
+
+  // The card loads after navigation, so a #pricing link (e.g. right after
+  // creating an experience) can't scroll to it on its own.
+  const loaded = !!data
+  useEffect(() => {
+    if (loaded && window.location.hash === '#pricing') {
+      document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [loaded])
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['experience-pricing', experienceId] })
   const { mutateAsync, isPending } = useMutation({
@@ -301,6 +310,17 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
   const run = (action: () => Promise<unknown>) =>
     mutateAsync(action).then(() => true, () => false)
 
+  if (isError) {
+    return (
+      <Alert id="pricing" variant="danger" className="mt-4 d-flex justify-content-between align-items-center">
+        <span>Couldn&apos;t load pricing: {apiErrorDetail(error, 'unknown error')}</span>
+        <Button size="sm" variant="outline-danger" disabled={isFetching} onClick={() => refetch()}>
+          {isFetching ? <Spinner size="sm" /> : 'Retry'}
+        </Button>
+      </Alert>
+    )
+  }
+
   if (isLoading || !data) {
     return <div className="text-center py-4"><Spinner animation="border" variant="primary" /></div>
   }
@@ -312,7 +332,7 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
     ({ label: d.label, amount: d.amount, pricing_unit: d.pricing_unit as AddonUnit })
 
   return (
-    <Card className="mt-4">
+    <Card id="pricing" className="mt-4">
       <CardBody>
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h6 className="text-uppercase text-muted small mb-0">Pricing</h6>
@@ -379,7 +399,7 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
           </tbody>
         </Table>
 
-        <h6 className="mt-4">Pricing rules</h6>
+        <h6 className="mt-4">Discounts &amp; pricing rules</h6>
         <p className="small text-muted">
           Group discounts, early-bird prices and weekday/weekend rates. Discounts don&apos;t stack: the customer gets the single biggest one they qualify for (early-bird, group or promo code). A group discount counts every ticket type together, and doesn&apos;t stop smaller bookings; for that, set the experience&apos;s min group size.
         </p>
