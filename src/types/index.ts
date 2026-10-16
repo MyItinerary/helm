@@ -171,6 +171,10 @@ export interface Experience {
   requirements?: ExperienceRequirements
   safety_info?: SafetyInfo
   cancellation_policy?: string
+  // Shown to travellers with a confirmed booking (booking page, day-of
+  // reminder), never on the public listing.
+  meeting_instructions?: string | null
+  what_to_bring?: string | null
   created_at: string
   updated_at?: string
 }

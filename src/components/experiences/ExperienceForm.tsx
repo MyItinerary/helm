@@ -89,6 +89,8 @@ const emptyForm = {
   whats_included: '',
   whats_not_included: '',
   cancellation_policy: '',
+  meeting_instructions: '',
+  what_to_bring: '',
   fitness_level: '',
   age: '',
   accessibility: '',
@@ -157,6 +159,8 @@ function toFormState(exp?: Partial<Experience>): FormState {
     whats_included: joinLines(exp.whats_included),
     whats_not_included: joinLines(exp.whats_not_included),
     cancellation_policy: exp.cancellation_policy ?? '',
+    meeting_instructions: exp.meeting_instructions ?? '',
+    what_to_bring: exp.what_to_bring ?? '',
     fitness_level: exp.requirements?.fitness_level ?? '',
     age: exp.requirements?.age ?? '',
     accessibility: exp.requirements?.accessibility ?? '',
@@ -280,6 +284,9 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         whats_included: lines(form.whats_included).length ? lines(form.whats_included) : undefined,
         whats_not_included: lines(form.whats_not_included).length ? lines(form.whats_not_included) : undefined,
         cancellation_policy: form.cancellation_policy || undefined,
+        // null clears a field that was emptied on edit.
+        meeting_instructions: form.meeting_instructions.trim() || null,
+        what_to_bring: form.what_to_bring.trim() || null,
         requirements: (form.fitness_level || form.age || form.accessibility) ? {
           fitness_level: form.fitness_level || undefined,
           age: form.age || undefined,
@@ -809,6 +816,40 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             <Form.Label>Cancellation policy</Form.Label>
             <Form.Control as="textarea" rows={2} value={form.cancellation_policy} onChange={set('cancellation_policy')} />
           </Form.Group>
+
+          <h6 className="text-uppercase text-muted small mb-3 mt-4">On the day (shared after booking)</h6>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Meeting instructions</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={3}
+                  maxLength={1000}
+                  value={form.meeting_instructions}
+                  onChange={set('meeting_instructions')}
+                  placeholder="e.g. Lekki Phase 1 jetty, by the blue kiosk"
+                />
+                <Form.Text muted>
+                  How to find you at the pinned location. Only travellers with a confirmed booking see this.
+                </Form.Text>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>What to bring</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={3}
+                  maxLength={1000}
+                  value={form.what_to_bring}
+                  onChange={set('what_to_bring')}
+                  placeholder="e.g. Swimwear and sunscreen"
+                />
+                <Form.Text muted>Shown on the booking page and in the morning-of reminder.</Form.Text>
+              </Form.Group>
+            </Col>
+          </Row>
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Requirements (optional)</h6>
           <Row>
