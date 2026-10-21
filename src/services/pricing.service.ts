@@ -13,6 +13,8 @@ export interface TicketType {
   description?: string | null
   amount: Money
   pricing_unit: TicketUnit
+  // False when archived: kept on past bookings, no longer sold.
+  is_active?: boolean
 }
 
 export interface Addon {
@@ -66,8 +68,11 @@ export interface PromoCode {
 const base = (experienceId: string) => `/experiences/${experienceId}`
 
 export const pricingService = {
-  get: (experienceId: string) =>
-    api.get<ExperiencePricing>(`${base(experienceId)}/pricing`).then((r) => r.data),
+  // Editors also see archived ticket types, so they can restore them.
+  get: (experienceId: string, { includeArchived = false } = {}) =>
+    api
+      .get<ExperiencePricing>(`${base(experienceId)}/pricing`, { params: includeArchived ? { include_archived: true } : undefined })
+      .then((r) => r.data),
 
   createTicket: (experienceId: string, data: Partial<TicketType>) =>
     api.post<TicketType>(`${base(experienceId)}/prices`, data).then((r) => r.data),
