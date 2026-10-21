@@ -8,6 +8,7 @@ import { faGear, faLock } from '@fortawesome/free-solid-svg-icons'
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import PasswordInput from '@/components/Form/PasswordInput'
 import { adminService } from '@/services/admin.service'
 
 function ChangePasswordCard() {
@@ -63,29 +64,26 @@ function ChangePasswordCard() {
           </Alert>
         )}
         <Form onSubmit={handleSubmit}>
-          <Form.Group className="mb-3">
+          <Form.Group className="mb-3" controlId="current-password">
             <Form.Label>Current password</Form.Label>
-            <Form.Control
-              type="password"
+            <PasswordInput
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
             />
           </Form.Group>
-          <Form.Group className="mb-3">
+          <Form.Group className="mb-3" controlId="new-password">
             <Form.Label>New password</Form.Label>
-            <Form.Control
-              type="password"
+            <PasswordInput
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               autoComplete="new-password"
             />
             <Form.Text className="text-muted">At least 8 characters.</Form.Text>
           </Form.Group>
-          <Form.Group className="mb-3">
+          <Form.Group className="mb-3" controlId="confirm-password">
             <Form.Label>Confirm new password</Form.Label>
-            <Form.Control
-              type="password"
+            <PasswordInput
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               autoComplete="new-password"

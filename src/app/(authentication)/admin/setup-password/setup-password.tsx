@@ -1,14 +1,12 @@
 'use client'
 
 import {
-  Alert, Button, Col, Form, FormControl, InputGroup, Row, Spinner,
+  Alert, Button, Col, Form, Row, Spinner,
 } from 'react-bootstrap'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faLock } from '@fortawesome/free-solid-svg-icons'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import InputGroupText from 'react-bootstrap/InputGroupText'
 import { toast } from 'sonner'
+import PasswordInput from '@/components/Form/PasswordInput'
 import { adminService } from '@/services/admin.service'
 
 const MIN_PASSWORD_LENGTH = 8
@@ -77,35 +75,27 @@ export default function SetupPasswordForm({ token, email }: SetupPasswordFormPro
       )}
 
       <Form onSubmit={handleSubmit}>
-        <InputGroup className="mb-3">
-          <InputGroupText>
-            <FontAwesomeIcon icon={faLock} fixedWidth />
-          </InputGroupText>
-          <FormControl
-            type="password"
-            name="new_password"
-            required
-            minLength={MIN_PASSWORD_LENGTH}
-            disabled={submitting}
-            placeholder="New password"
-            aria-label="New password"
-          />
-        </InputGroup>
+        <PasswordInput
+          withLockIcon
+          className="mb-3"
+          name="new_password"
+          required
+          minLength={MIN_PASSWORD_LENGTH}
+          disabled={submitting}
+          placeholder="New password"
+          aria-label="New password"
+        />
 
-        <InputGroup className="mb-4">
-          <InputGroupText>
-            <FontAwesomeIcon icon={faLock} fixedWidth />
-          </InputGroupText>
-          <FormControl
-            type="password"
-            name="confirm_password"
-            required
-            minLength={MIN_PASSWORD_LENGTH}
-            disabled={submitting}
-            placeholder="Confirm password"
-            aria-label="Confirm password"
-          />
-        </InputGroup>
+        <PasswordInput
+          withLockIcon
+          className="mb-4"
+          name="confirm_password"
+          required
+          minLength={MIN_PASSWORD_LENGTH}
+          disabled={submitting}
+          placeholder="Confirm password"
+          aria-label="Confirm password"
+        />
 
         <Row className="align-items-center">
           <Col xs={6}>
