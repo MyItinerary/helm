@@ -11,7 +11,7 @@ import { experienceService, orphanedBookings } from '@/services/experience.servi
 import { apiErrorDetail } from '@/services/pricing.service'
 import { searchLocation, type GeocodeResult } from '@/lib/geocoding'
 import { useCategoryOptions } from '@/hooks/use-category-options'
-import type { Experience } from '@/types'
+import type { Experience, ItineraryStep } from '@/types'
 import {
   formatRecurrenceSummary, withDerivedMonthFields, type RecurrenceSummaryInput,
 } from '@/utils/recurrence'
@@ -20,6 +20,7 @@ import CustomRecurrenceModal, { type RecurrenceFields } from './CustomRecurrence
 import {
   TIMEZONE_OPTIONS, scheduleEndPreview, sessionLengthDays, shortTime,
 } from '@/utils/schedule'
+import ItineraryField from './ItineraryField'
 import TimeInput from './TimeInput'
 import ExperiencePricingManager from './ExperiencePricingManager'
 import ExperienceImagesField from './ExperienceImagesField'
@@ -89,6 +90,9 @@ const emptyForm = {
   whats_included: '',
   whats_not_included: '',
   cancellation_policy: '',
+  meeting_instructions: '',
+  what_to_bring: '',
+  itinerary: [] as ItineraryStep[],
   fitness_level: '',
   age: '',
   accessibility: '',
@@ -157,6 +161,9 @@ function toFormState(exp?: Partial<Experience>): FormState {
     whats_included: joinLines(exp.whats_included),
     whats_not_included: joinLines(exp.whats_not_included),
     cancellation_policy: exp.cancellation_policy ?? '',
+    meeting_instructions: exp.meeting_instructions ?? '',
+    what_to_bring: exp.what_to_bring ?? '',
+    itinerary: (exp.itinerary ?? []).map((step) => ({ title: step.title, description: step.description ?? '' })),
     fitness_level: exp.requirements?.fitness_level ?? '',
     age: exp.requirements?.age ?? '',
     accessibility: exp.requirements?.accessibility ?? '',
@@ -280,6 +287,12 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         whats_included: lines(form.whats_included).length ? lines(form.whats_included) : undefined,
         whats_not_included: lines(form.whats_not_included).length ? lines(form.whats_not_included) : undefined,
         cancellation_policy: form.cancellation_policy || undefined,
+        meeting_instructions: form.meeting_instructions || undefined,
+        what_to_bring: form.what_to_bring || undefined,
+        // Always sent, so removing every step clears the itinerary.
+        itinerary: form.itinerary
+          .map((step) => ({ title: step.title.trim(), description: step.description?.trim() || undefined }))
+          .filter((step) => step.title),
         requirements: (form.fitness_level || form.age || form.accessibility) ? {
           fitness_level: form.fitness_level || undefined,
           age: form.age || undefined,
@@ -496,6 +509,21 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
               </Form.Group>
             </Col>
           </Row>
+          <Form.Text className="text-muted d-block mb-3">
+            The pin is where travellers meet you. The listing only shows the area; the exact pin goes to travellers once they&apos;ve booked.
+          </Form.Text>
+          <Form.Group className="mb-3">
+            <Form.Label>Meeting instructions (optional)</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={2}
+              maxLength={1000}
+              value={form.meeting_instructions}
+              onChange={set('meeting_instructions')}
+              placeholder="e.g. Wait by the blue gate at the jetty and call on arrival"
+            />
+            <Form.Text className="text-muted">Only travellers with a confirmed booking see this.</Form.Text>
+          </Form.Group>
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Pricing &amp; Logistics</h6>
           <Row>
@@ -805,6 +833,22 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
               </Form.Group>
             </Col>
           </Row>
+          <ItineraryField
+            steps={form.itinerary}
+            onChange={(itinerary) => setForm((f) => ({ ...f, itinerary }))}
+          />
+          <Form.Group className="mb-3">
+            <Form.Label>What to bring (optional)</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={2}
+              maxLength={1000}
+              value={form.what_to_bring}
+              onChange={set('what_to_bring')}
+              placeholder="e.g. Swimwear, sunscreen and a change of clothes"
+            />
+            <Form.Text className="text-muted">Sent with the booking and the day-of reminder.</Form.Text>
+          </Form.Group>
           <Form.Group className="mb-3">
             <Form.Label>Cancellation policy</Form.Label>
             <Form.Control as="textarea" rows={2} value={form.cancellation_policy} onChange={set('cancellation_policy')} />
