@@ -138,6 +138,102 @@ function CreatePromoModal({ show, onClose }: { show: boolean; onClose: () => voi
   )
 }
 
+// Dates are stored as midnight UTC on the chosen day.
+const toDateInput = (iso?: string | null) => (iso ? iso.slice(0, 10) : '')
+const fromDateInput = (value: string) => (value ? new Date(value).toISOString() : null)
+
+// Only the dates, max uses and minimum booking can change once a code exists:
+// its code, discount and who pays for it are fixed.
+function EditPromoModal({ promo, onClose }: { promo: PromoCode | null; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const [draft, setDraft] = useState({ starts_at: '', ends_at: '', max_redemptions: '', min_subtotal: '' })
+  const [loadedId, setLoadedId] = useState<string | null>(null)
+  if (promo && promo.id !== loadedId) {
+    setLoadedId(promo.id)
+    setDraft({
+      starts_at: toDateInput(promo.starts_at),
+      ends_at: toDateInput(promo.ends_at),
+      max_redemptions: promo.max_redemptions != null ? String(promo.max_redemptions) : '',
+      min_subtotal: promo.min_subtotal != null ? String(Number(promo.min_subtotal)) : '',
+    })
+  }
+  const set = (key: keyof typeof draft) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setDraft((d) => ({ ...d, [key]: e.target.value }))
+  // Reopening the same code starts again from what's saved.
+  const close = () => {
+    setLoadedId(null)
+    onClose()
+  }
+
+  const usedUp = !!promo && draft.max_redemptions !== '' && Number(draft.max_redemptions) < promo.redemptions_count
+  const backwards = !!draft.starts_at && !!draft.ends_at && draft.ends_at < draft.starts_at
+
+  const { mutate, isPending } = useMutation({
+    // An emptied field is sent as null, which clears it.
+    mutationFn: () => pricingService.updatePromoCode(promo!.id, {
+      starts_at: fromDateInput(draft.starts_at),
+      ends_at: fromDateInput(draft.ends_at),
+      max_redemptions: draft.max_redemptions ? Number(draft.max_redemptions) : null,
+      min_subtotal: draft.min_subtotal || null,
+    }),
+    onSuccess: () => {
+      toast.success('Promo code updated')
+      queryClient.invalidateQueries({ queryKey: ['promo-codes'] })
+      close()
+    },
+    onError: (error) => toast.error(apiErrorDetail(error, 'Could not update the promo code')),
+  })
+
+  return (
+    <Modal show={!!promo} onHide={close}>
+      <Modal.Header closeButton><Modal.Title>Edit {promo?.code}</Modal.Title></Modal.Header>
+      <Modal.Body>
+        <p className="small text-muted">
+          {promo && `${formatValue(promo)}, funded by ${fundingLabel(promo.platform_share_percent)}. `}
+          To change the discount, turn this code off and create a new one.
+        </p>
+        <Row className="g-3">
+          <Col md={6}>
+            <Form.Label htmlFor="edit-promo-starts">Starts</Form.Label>
+            <Form.Control id="edit-promo-starts" type="date" value={draft.starts_at} onChange={set('starts_at')} />
+          </Col>
+          <Col md={6}>
+            <Form.Label htmlFor="edit-promo-ends">Ends</Form.Label>
+            <Form.Control id="edit-promo-ends" type="date" value={draft.ends_at} onChange={set('ends_at')} isInvalid={backwards} />
+            <Form.Control.Feedback type="invalid">Ends before it starts.</Form.Control.Feedback>
+          </Col>
+          <Col md={6}>
+            <Form.Label htmlFor="edit-promo-max">Max uses</Form.Label>
+            <Form.Control
+              id="edit-promo-max"
+              type="number"
+              min={1}
+              value={draft.max_redemptions}
+              onChange={set('max_redemptions')}
+              placeholder="Unlimited"
+              isInvalid={usedUp}
+            />
+            <Form.Control.Feedback type="invalid">
+              Already used {promo?.redemptions_count} times.
+            </Form.Control.Feedback>
+          </Col>
+          <Col md={6}>
+            <Form.Label htmlFor="edit-promo-min">Minimum booking</Form.Label>
+            <Form.Control id="edit-promo-min" type="number" min={0} value={draft.min_subtotal} onChange={set('min_subtotal')} placeholder="None" />
+          </Col>
+        </Row>
+        <Form.Text className="text-muted">Leave a field empty to remove that limit.</Form.Text>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="outline-secondary" onClick={close}>Cancel</Button>
+        <Button variant="primary" disabled={isPending || usedUp || backwards} onClick={() => mutate()}>
+          {isPending ? <Spinner size="sm" /> : 'Save'}
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  )
+}
+
 const formatValue = (p: PromoCode) =>
   p.kind === 'percent'
     ? `${Number(p.value)}% off`
@@ -147,6 +243,7 @@ const formatDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateStr
 
 export default function PromoCodesPage() {
   const [showCreate, setShowCreate] = useState(false)
+  const [editing, setEditing] = useState<PromoCode | null>(null)
   const queryClient = useQueryClient()
   const { data, isLoading } = useQuery({ queryKey: ['promo-codes'], queryFn: pricingService.listPromoCodes })
 
@@ -193,7 +290,10 @@ export default function PromoCodesPage() {
                     <td>
                       <Badge bg={p.is_active ? 'success' : 'secondary'}>{p.is_active ? 'Active' : 'Off'}</Badge>
                     </td>
-                    <td className="text-end">
+                    <td className="text-end text-nowrap">
+                      <Button size="sm" variant="outline-primary" className="me-2" onClick={() => setEditing(p)}>
+                        Edit
+                      </Button>
                       <Button size="sm" variant="outline-secondary" disabled={isPending} onClick={() => toggle(p)}>
                         {p.is_active ? 'Turn off' : 'Turn on'}
                       </Button>
@@ -210,6 +310,7 @@ export default function PromoCodesPage() {
       </Card>
 
       <CreatePromoModal show={showCreate} onClose={() => setShowCreate(false)} />
+      <EditPromoModal promo={editing} onClose={() => setEditing(null)} />
     </div>
   )
 }

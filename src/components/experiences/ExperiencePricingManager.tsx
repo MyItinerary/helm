@@ -42,25 +42,44 @@ function describeRule(rule: PriceRule, tickets: TicketType[], currency: string):
   return `${money(rule.unit_amount ?? 0, currency)} on ${days}${scope}`
 }
 
-// A ticket type or add-on row, editable in place.
+type PriceDraft = { label: string; description: string; amount: string; pricing_unit: string }
+
+// A ticket type or add-on row, editable in place. The description is shown to
+// customers under the label in the booking panel.
 function PriceRow<T extends TicketType | Addon>({
-  item, units, currency, onSave, onDelete, saving,
+  item, units, currency, onSave, onDelete, onArchive, saving,
 }: {
   item: T
   units: { value: string; label: string }[]
   currency: string
-  onSave: (data: { label: string; amount: string; pricing_unit: string }) => void
+  onSave: (data: PriceDraft) => void
   onDelete: () => void
+  // Tickets only: stop selling it but keep it on past bookings.
+  onArchive?: () => void
   saving: boolean
 }) {
   const [label, setLabel] = useState(item.label)
+  const [description, setDescription] = useState(item.description ?? '')
   const [amount, setAmount] = useState(String(Number(item.amount)))
   const [unit, setUnit] = useState<string>(item.pricing_unit)
-  const dirty = label !== item.label || Number(amount) !== Number(item.amount) || unit !== item.pricing_unit
+  const dirty = label !== item.label
+    || description !== (item.description ?? '')
+    || Number(amount) !== Number(item.amount)
+    || unit !== item.pricing_unit
 
   return (
     <tr>
-      <td><Form.Control size="sm" value={label} onChange={(e) => setLabel(e.target.value)} /></td>
+      <td>
+        <Form.Control size="sm" aria-label="Name" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <Form.Control
+          size="sm"
+          className="mt-1"
+          aria-label="Description"
+          placeholder="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </td>
       <td>
         <Form.Select size="sm" value={unit} onChange={(e) => setUnit(e.target.value)}>
           {units.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
@@ -76,10 +95,22 @@ function PriceRow<T extends TicketType | Addon>({
           variant="primary"
           className="me-2"
           disabled={!dirty || !label.trim() || amount === '' || saving}
-          onClick={() => onSave({ label: label.trim(), amount, pricing_unit: unit })}
+          onClick={() => onSave({ label: label.trim(), description: description.trim(), amount, pricing_unit: unit })}
         >
           Save
         </Button>
+        {onArchive && (
+          <Button
+            size="sm"
+            variant="outline-secondary"
+            className="me-2"
+            disabled={saving}
+            title="Stop selling it. Past bookings keep it."
+            onClick={onArchive}
+          >
+            Archive
+          </Button>
+        )}
         <Button size="sm" variant="outline-danger" disabled={saving} onClick={onDelete}>Delete</Button>
       </td>
     </tr>
@@ -92,16 +123,27 @@ function AddPriceRow({
   units: { value: string; label: string }[]
   defaultUnit: string
   placeholder: string
-  onAdd: (data: { label: string; amount: string; pricing_unit: string }) => Promise<boolean>
+  onAdd: (data: PriceDraft) => Promise<boolean>
   saving: boolean
 }) {
   const [label, setLabel] = useState('')
+  const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [unit, setUnit] = useState(defaultUnit)
 
   return (
     <tr>
-      <td><Form.Control size="sm" placeholder={placeholder} value={label} onChange={(e) => setLabel(e.target.value)} /></td>
+      <td>
+        <Form.Control size="sm" aria-label="New name" placeholder={placeholder} value={label} onChange={(e) => setLabel(e.target.value)} />
+        <Form.Control
+          size="sm"
+          className="mt-1"
+          aria-label="New description"
+          placeholder="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </td>
       <td>
         <Form.Select size="sm" value={unit} onChange={(e) => setUnit(e.target.value)}>
           {units.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
@@ -113,9 +155,10 @@ function AddPriceRow({
           size="sm"
           variant="outline-primary"
           disabled={!label.trim() || amount === '' || saving}
-          onClick={() => onAdd({ label: label.trim(), amount, pricing_unit: unit }).then((ok) => {
+          onClick={() => onAdd({ label: label.trim(), description: description.trim(), amount, pricing_unit: unit }).then((ok) => {
             if (!ok) return
             setLabel('')
+            setDescription('')
             setAmount('')
           })}
         >
@@ -285,7 +328,7 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['experience-pricing', experienceId],
-    queryFn: () => pricingService.get(experienceId),
+    queryFn: () => pricingService.get(experienceId, { includeArchived: true }),
   })
 
   // The card loads after navigation, so a #pricing link (e.g. right after
@@ -325,11 +368,15 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
     return <div className="text-center py-4"><Spinner animation="border" variant="primary" /></div>
   }
 
-  const { currency, prices: tickets, addons, rules } = data
-  const toTicket = (d: { label: string; amount: string; pricing_unit: string }) =>
-    ({ label: d.label, amount: d.amount, pricing_unit: d.pricing_unit as TicketUnit })
-  const toAddon = (d: { label: string; amount: string; pricing_unit: string }) =>
-    ({ label: d.label, amount: d.amount, pricing_unit: d.pricing_unit as AddonUnit })
+  const { currency, prices: allTickets, addons, rules } = data
+  // Older servers don't send is_active; their tickets are all on sale.
+  const tickets = allTickets.filter((t) => t.is_active !== false)
+  const archived = allTickets.filter((t) => t.is_active === false)
+  // An empty description clears it.
+  const toTicket = (d: PriceDraft) =>
+    ({ label: d.label, description: d.description || null, amount: d.amount, pricing_unit: d.pricing_unit as TicketUnit })
+  const toAddon = (d: PriceDraft) =>
+    ({ label: d.label, description: d.description || null, amount: d.amount, pricing_unit: d.pricing_unit as AddonUnit })
 
   return (
     <Card id="pricing" className="mt-4">
@@ -349,12 +396,13 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
           <tbody>
             {tickets.map((t) => (
               <PriceRow
-                key={`${t.id}-${t.amount}-${t.label}-${t.pricing_unit}`}
+                key={`${t.id}-${t.amount}-${t.label}-${t.pricing_unit}-${t.description ?? ''}`}
                 item={t}
                 units={TICKET_UNITS}
                 currency={currency}
                 saving={isPending}
                 onSave={(d) => run(() => pricingService.updateTicket(experienceId, t.id, toTicket(d)))}
+                onArchive={() => run(() => pricingService.updateTicket(experienceId, t.id, { is_active: false }))}
                 onDelete={() => run(() => pricingService.deleteTicket(experienceId, t.id))}
               />
             ))}
@@ -368,7 +416,32 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
           </tbody>
         </Table>
         {tickets.length === 0 && (
-          <p className="small text-danger">No ticket types yet: customers can&apos;t book this experience.</p>
+          <p className="small text-danger">No ticket types on sale: customers can&apos;t book this experience.</p>
+        )}
+        <p className="small text-muted">
+          A ticket type that has bookings can&apos;t be deleted. Archive it instead: customers stop seeing it, and past bookings keep it.
+        </p>
+        {archived.length > 0 && (
+          <>
+            <div className="small fw-semibold text-muted mb-1">Archived</div>
+            <ul className="list-unstyled small mb-0">
+              {archived.map((t) => (
+                <li key={t.id} className="d-flex justify-content-between align-items-center border-bottom py-1 text-muted">
+                  <span>
+                    {t.label} · {money(t.amount, currency)} {TICKET_UNITS.find((u) => u.value === t.pricing_unit)?.label.toLowerCase()}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    disabled={isPending}
+                    onClick={() => run(() => pricingService.updateTicket(experienceId, t.id, { is_active: true }))}
+                  >
+                    Restore
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
 
         <h6 className="mt-4">Add-ons</h6>
@@ -380,7 +453,7 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
           <tbody>
             {addons.map((a) => (
               <PriceRow
-                key={`${a.id}-${a.amount}-${a.label}-${a.pricing_unit}`}
+                key={`${a.id}-${a.amount}-${a.label}-${a.pricing_unit}-${a.description ?? ''}`}
                 item={a}
                 units={ADDON_UNITS}
                 currency={currency}
@@ -410,7 +483,7 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
             {rules.map((r) => (editingRuleId === r.id ? (
               <li key={r.id} className="border-bottom pb-2">
                 <RuleForm
-                  tickets={tickets}
+                  tickets={allTickets}
                   initial={toRuleDraft(r)}
                   saving={isPending}
                   onCancel={() => setEditingRuleId(null)}
@@ -424,7 +497,7 @@ export default function ExperiencePricingManager({ experienceId }: { experienceI
               <li key={r.id} className="d-flex justify-content-between align-items-center border-bottom py-2">
                 <span>
                   {r.label && <strong className="me-2">{r.label}</strong>}
-                  {describeRule(r, tickets, currency)}
+                  {describeRule(r, allTickets, currency)}
                 </span>
                 <span className="text-nowrap">
                   <Button size="sm" variant="outline-secondary" className="me-2" disabled={isPending} onClick={() => setEditingRuleId(r.id)}>
