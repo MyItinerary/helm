@@ -24,8 +24,10 @@ import ItineraryField from './ItineraryField'
 import TimeInput from './TimeInput'
 import ExperiencePricingManager from './ExperiencePricingManager'
 import ExperienceImagesField from './ExperienceImagesField'
+import InterestTagsField from './InterestTagsField'
 
-// interest_tags is a free-form Postgres array server-side, so any ids here are safe to add.
+// The "Category" select writes one of these into headline; the mobile app groups
+// experiences by it. Interest tags come from the live interest categories instead.
 const INTEREST_OPTIONS = [
   { id: 'food', label: 'Local food & drinks' },
   { id: 'culture', label: 'Culture & history' },
@@ -210,6 +212,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
   const energyOptions = categoriesByType.energy_level ?? []
   const budgetOptions = categoriesByType.budget_level ?? []
   const comfortOptions = categoriesByType.comfort_level ?? []
+  const interestCategories = (categoriesByType.interest ?? []).filter((c) => c.is_active)
 
   // Sessions lasting several days can only start at one time.
   const multiDay = sessionLengthDays(form) > 1
@@ -763,7 +766,12 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Interest tags</Form.Label>
-                <TagPillSelect options={INTEREST_OPTIONS} value={form.interest_tags} onChange={setMulti('interest_tags')} />
+                <InterestTagsField
+                  categories={interestCategories}
+                  loading={categoriesLoading}
+                  value={form.interest_tags}
+                  onChange={setMulti('interest_tags')}
+                />
               </Form.Group>
             </Col>
             <Col md={6}>
