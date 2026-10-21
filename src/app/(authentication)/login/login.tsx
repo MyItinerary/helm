@@ -5,10 +5,10 @@ import {
 } from 'react-bootstrap'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUser } from '@fortawesome/free-regular-svg-icons'
-import { faLock } from '@fortawesome/free-solid-svg-icons'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import InputGroupText from 'react-bootstrap/InputGroupText'
+import PasswordInput from '@/components/Form/PasswordInput'
 import { login } from '@/lib/auth'
 import { useAuthStore } from '@/store/auth.store'
 
@@ -61,19 +61,15 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           />
         </InputGroup>
 
-        <InputGroup className="mb-4">
-          <InputGroupText>
-            <FontAwesomeIcon icon={faLock} fixedWidth />
-          </InputGroupText>
-          <FormControl
-            type="password"
-            name="password"
-            required
-            disabled={submitting}
-            placeholder="Password"
-            aria-label="Password"
-          />
-        </InputGroup>
+        <PasswordInput
+          withLockIcon
+          className="mb-4"
+          name="password"
+          required
+          disabled={submitting}
+          placeholder="Password"
+          aria-label="Password"
+        />
 
         <Row className="align-items-center">
           <Col xs={6}>
