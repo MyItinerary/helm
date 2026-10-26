@@ -22,7 +22,9 @@ import {
 } from '@/utils/schedule'
 import ItineraryField from './ItineraryField'
 import TimeInput from './TimeInput'
-import ExperiencePricingManager from './ExperiencePricingManager'
+import ExperiencePricingManager, {
+  PricingDraftEditor, newPricingDraft, pricingDraftPayload, pricingDraftProblem, type PricingContext, type PricingDraft,
+} from './ExperiencePricingManager'
 import ExperienceImagesField from './ExperienceImagesField'
 import InterestTagsField from './InterestTagsField'
 
@@ -58,7 +60,6 @@ const emptyForm = {
   country: '',
   latitude: '',
   longitude: '',
-  price_from: '',
   currency: 'NGN',
   duration_hours: '',
   duration_mins: '',
@@ -121,7 +122,6 @@ function toFormState(exp?: Partial<Experience>): FormState {
     country: exp.country ?? '',
     latitude: exp.latitude != null ? String(exp.latitude) : '',
     longitude: exp.longitude != null ? String(exp.longitude) : '',
-    price_from: exp.price_from != null ? String(exp.price_from) : '',
     currency: exp.currency ?? 'NGN',
     duration_hours: exp.duration_minutes != null ? String(Math.floor(exp.duration_minutes / 60)) : '',
     duration_mins: exp.duration_minutes != null ? String(exp.duration_minutes % 60) : '',
@@ -216,6 +216,15 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
 
   // Sessions lasting several days can only start at one time.
   const multiDay = sessionLengthDays(form) > 1
+  // Which kinds of pricing fit, from the schedule (see ExperiencePricingManager).
+  const pricingContext: PricingContext = {
+    multiDay,
+    dated: form.schedule_type === 'one_off' || form.schedule_type === 'recurring',
+    recurring: form.schedule_type === 'recurring',
+  }
+  // A new experience's pricing, sent with it on Create.
+  const [pricingDraft, setPricingDraft] = useState<PricingDraft>(newPricingDraft)
+  const pricingProblem = mode === 'create' ? pricingDraftProblem(pricingDraft) : null
   const sessionTimes = (multiDay ? form.start_times.slice(0, 1) : form.start_times)
     .filter(Boolean)
     .filter((t, i, all) => all.indexOf(t) === i)
@@ -316,25 +325,19 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         )
         return experienceService.update(experienceId, update, { confirm })
       }
-      // A new experience gets a "Standard" ticket at the price entered, in the
-      // same request, so it's bookable straight away (and a failed ticket can't
-      // leave a half-created experience). More pricing is on the edit page.
-      return experienceService.create({
-        ...payload,
-        prices: form.price_from !== ''
-          ? [{ label: 'Standard', amount: form.price_from, pricing_unit: 'per_person' }]
-          : undefined,
-      })
+      // A new experience is created with all its pricing in one request, so
+      // it's bookable straight away and a bad rule can't leave it half-priced.
+      return experienceService.create({ ...payload, ...pricingDraftPayload(pricingDraft) })
     },
     onSuccess: (saved) => {
       setStrandedBookings(null)
-      toast.success(mode === 'edit' ? 'Experience updated' : 'Experience created: now add ticket types and discounts')
+      toast.success(mode === 'edit' ? 'Experience updated' : 'Experience created')
       queryClient.invalidateQueries({ queryKey: ['experiences'] })
       if (mode === 'edit' && experienceId) {
         queryClient.invalidateQueries({ queryKey: ['experience', experienceId] })
         router.push('/experiences')
       } else {
-        router.push(`/experiences/${saved.id}/edit#pricing`)
+        router.push(`/experiences/${saved.id}/edit`)
       }
     },
     onError: (error) => {
@@ -530,23 +533,9 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
 
           <div className="d-flex justify-content-between align-items-baseline mb-3 mt-4">
             <h6 className="text-uppercase text-muted small mb-0">Pricing &amp; Logistics</h6>
-            {mode === 'edit' && <a href="#pricing" className="small">Ticket types, add-ons &amp; discounts ↓</a>}
+            <a href="#pricing" className="small">Ticket types, add-ons &amp; discounts ↓</a>
           </div>
-          {mode !== 'edit' && (
-            <Alert variant="info" className="small py-2">
-              Ticket types, add-ons and discounts (group, early-bird, weekday rates) are set after you click Create. You&apos;ll go straight to them.
-            </Alert>
-          )}
           <Row>
-            {mode !== 'edit' && (
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Standard ticket price</Form.Label>
-                  <Form.Control type="number" min={0} value={form.price_from} onChange={set('price_from')} />
-                  <Form.Text className="text-muted">Per person. Becomes the Standard ticket type.</Form.Text>
-                </Form.Group>
-              </Col>
-            )}
             <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>Currency</Form.Label>
@@ -587,9 +576,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
                 <Form.Control.Feedback type="invalid">Must be between 1 and the max group size.</Form.Control.Feedback>
                 <Form.Text muted>
                   Bookings with fewer guests are blocked. Leave blank to allow 1 guest.{' '}
-                  {mode === 'edit'
-                    ? <>For a group discount, use <a href="#pricing">Discounts &amp; pricing rules</a>.</>
-                    : 'Add a group discount after creating.'}
+                  For a group discount, use <a href="#pricing">Discounts &amp; pricing rules</a>.
                 </Form.Text>
               </Form.Group>
             </Col>
@@ -945,8 +932,18 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             </Col>
           </Row>
 
+          {mode === 'create' && (
+            <PricingDraftEditor
+              value={pricingDraft}
+              onChange={setPricingDraft}
+              currency={form.currency || 'NGN'}
+              context={pricingContext}
+            />
+          )}
+
+          {pricingProblem && <Alert variant="warning" className="small py-2 mt-3">{pricingProblem}</Alert>}
           <div className="d-flex gap-2 pt-2">
-            <Button variant="primary" disabled={!form.title || groupSizeInvalid || isPending || isUploadingImages} onClick={() => mutate({})}>
+            <Button variant="primary" disabled={!form.title || groupSizeInvalid || !!pricingProblem || isPending || isUploadingImages} onClick={() => mutate({})}>
               {isPending ? <Spinner size="sm" /> : (mode === 'edit' ? 'Save changes' : 'Create')}
             </Button>
             <Button variant="outline-secondary" onClick={() => router.back()}>Cancel</Button>
@@ -954,7 +951,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         </CardBody>
       </Card>
 
-      {mode === 'edit' && experienceId && <ExperiencePricingManager experienceId={experienceId} />}
+      {mode === 'edit' && experienceId && <ExperiencePricingManager experienceId={experienceId} context={pricingContext} />}
 
       <Modal show={strandedBookings != null} onHide={() => setStrandedBookings(null)} centered>
         <Modal.Header closeButton>
