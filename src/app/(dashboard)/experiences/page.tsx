@@ -31,6 +31,28 @@ function ExperiencePhotos({ urls }: { urls: string[] }) {
   )
 }
 
+// "very_high" reads as "Very high".
+const label = (value?: string | null) => (value ? value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' ') : '—')
+const note = (value?: string | null) => (value ? ` — ${value}` : '')
+
+function refundLabel(policy?: string | null, hours?: number | null) {
+  if (policy === 'full_refund_until') return `Full refund until ${hours ?? '?'} hours before`
+  if (policy === 'non_refundable') return 'Non-refundable'
+  if (policy === 'custom') return 'Custom'
+  return '—'
+}
+
+function ItemList({ title, items }: { title: string; items?: string[] | null }) {
+  return (
+    <Col md={4} className="mb-2">
+      <strong>{title}</strong>
+      <ul className="small text-muted mb-0 ps-3">
+        {items?.length ? items.map((i) => <li key={i}>{i}</li>) : <li>—</li>}
+      </ul>
+    </Col>
+  )
+}
+
 function ViewExperienceModal({ experienceId, onClose }: { experienceId: string | null; onClose: () => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['experience', experienceId],
@@ -110,43 +132,38 @@ function ViewExperienceModal({ experienceId, onClose }: { experienceId: string |
               <Col md={12}><strong>Time of day:</strong> {data.time_of_day ?? '—'}</Col>
             </Row>
 
-            <h6 className="text-uppercase text-muted small mb-2 mt-3">What Travellers Get</h6>
-            <Row className="mb-3">
+            <h6 className="text-uppercase text-muted small mb-2 mt-3">Fit and logistics</h6>
+            <Row className="mb-3 small">
+              <Col md={4}><strong>Fitness:</strong> {label(data.fitness_level)}{note(data.fitness_note)}</Col>
               <Col md={4}>
-                <strong>What you&apos;ll do</strong>
-                <ul className="small text-muted mb-0 ps-3">
-                  {data.what_you_will_do?.length ? data.what_you_will_do.map((i) => <li key={i}>{i}</li>) : <li>—</li>}
-                </ul>
+                <strong>Age:</strong> {label(data.age_policy)}{data.min_age != null ? ` (${data.min_age})` : ''}{note(data.age_note)}
               </Col>
-              <Col md={4}>
-                <strong>Included</strong>
-                <ul className="small text-muted mb-0 ps-3">
-                  {data.whats_included?.length ? data.whats_included.map((i) => <li key={i}>{i}</li>) : <li>—</li>}
-                </ul>
-              </Col>
-              <Col md={4}>
-                <strong>Not included</strong>
-                <ul className="small text-muted mb-0 ps-3">
-                  {data.whats_not_included?.length ? data.whats_not_included.map((i) => <li key={i}>{i}</li>) : <li>—</li>}
-                </ul>
-              </Col>
+              <Col md={4}><strong>Accessibility:</strong> {label(data.accessibility)}{note(data.accessibility_note)}</Col>
+              <Col md={4}><strong>Languages:</strong> {data.languages?.join(', ') || '—'}</Col>
+              <Col md={4}><strong>Weather dependent:</strong> {data.weather_dependent ? 'Yes' : 'No'}</Col>
+              <Col md={4}><strong>Pickup:</strong> {data.pickup_available ? data.pickup_note || 'Yes' : 'No'}</Col>
+              <Col md={12}><strong>Meeting landmark:</strong> {data.meeting_landmark || '—'}</Col>
             </Row>
-            <p className="mb-3"><strong>Cancellation policy:</strong> {data.cancellation_policy || '—'}</p>
 
-            {data.requirements && (
-              <>
-                <h6 className="text-uppercase text-muted small mb-2 mt-3">Requirements</h6>
-                <p className="mb-3">
-                  Fitness: {data.requirements.fitness_level ?? '—'} · Age: {data.requirements.age ?? '—'} · Accessibility: {data.requirements.accessibility ?? '—'}
-                </p>
-              </>
-            )}
+            <h6 className="text-uppercase text-muted small mb-2 mt-3">What guests get</h6>
+            <Row className="mb-3">
+              <ItemList title="Highlights" items={data.highlights ?? data.what_you_will_do} />
+              <ItemList title="Included" items={data.whats_included} />
+              <ItemList title="Not included" items={data.whats_not_included} />
+              <ItemList title="What to bring" items={data.what_to_bring_items} />
+              <ItemList title="Not suitable for" items={data.not_suitable_for} />
+              <ItemList title="Know before you go" items={data.know_before_you_go} />
+            </Row>
+            <p className="mb-3">
+              <strong>Cancellation:</strong> {refundLabel(data.refund_policy, data.free_cancellation_hours)}
+              {data.cancellation_policy && <span className="d-block small text-muted">{data.cancellation_policy}</span>}
+            </p>
 
             {data.safety_info && (
               <>
                 <h6 className="text-uppercase text-muted small mb-2 mt-3">Safety Info</h6>
                 <p className="mb-1">
-                  Risk: {data.safety_info.riskLevel} · Mobility: {data.safety_info.mobilityAccessibility}
+                  Risk: {data.safety_info.riskLevel}
                   {data.safety_info.recommendedTimeOfDay && ` · Recommended time: ${data.safety_info.recommendedTimeOfDay}`}
                 </p>
                 {data.safety_info.notes?.length > 0 && (

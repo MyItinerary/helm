@@ -27,6 +27,11 @@ import ExperiencePricingManager, {
 } from './ExperiencePricingManager'
 import ExperienceImagesField from './ExperienceImagesField'
 import InterestTagsField from './InterestTagsField'
+import FitLogisticsSection, {
+  fitLogisticsPayload, fitLogisticsProblem, toFitLogistics, type FitLogistics,
+} from './FitLogisticsSection'
+import ListItemsField, { cleanItems } from './ListItemsField'
+import MeetingPhotoField from './MeetingPhotoField'
 
 // The "Category" select writes one of these into headline; the mobile app groups
 // experiences by it. Interest tags come from the live interest categories instead.
@@ -45,11 +50,15 @@ const INTEREST_OPTIONS = [
 // live via useCategoryOptions() below rather than hardcoded here.
 const TIME_OF_DAY_OPTIONS = ['day', 'night']
 const RISK_LEVEL_OPTIONS = ['LOW', 'MEDIUM', 'HIGH']
-const MOBILITY_OPTIONS = ['FULL', 'LIMITED', 'UNKNOWN']
+const REFUND_POLICY_OPTIONS = [
+  { id: 'full_refund_until', label: 'Full refund until a set time before' },
+  { id: 'non_refundable', label: 'Non-refundable' },
+  { id: 'custom', label: 'Custom (explain below)' },
+]
 const CURRENCY_OPTIONS = ['NGN', 'USD', 'GBP']
 const DURATION_HOUR_OPTIONS = Array.from({ length: 25 }, (_, i) => String(i))
 const DURATION_MIN_OPTIONS = ['0', '15', '30', '45']
-const MAX_DESCRIPTION_WORDS = 100
+const MAX_DESCRIPTION_WORDS = 300
 const countWords = (s: string) => (s.trim() ? s.trim().split(/\s+/).length : 0)
 
 const emptyForm = {
@@ -89,19 +98,22 @@ const emptyForm = {
   recurrence_end_date: '',
   recurrence_count: '',
   is_featured: false,
-  what_you_will_do: '',
-  whats_included: '',
-  whats_not_included: '',
+  highlights: [] as string[],
+  whats_included: [] as string[],
+  whats_not_included: [] as string[],
+  what_to_bring_items: [] as string[],
+  not_suitable_for: [] as string[],
+  know_before_you_go: [] as string[],
+  refund_policy: '',
+  free_cancellation_hours: '',
   cancellation_policy: '',
+  meeting_landmark: '',
+  meeting_photo_url: '',
   meeting_instructions: '',
-  what_to_bring: '',
   itinerary: [] as ItineraryStep[],
-  fitness_level: '',
-  age: '',
-  accessibility: '',
+  fit: toFitLogistics() as FitLogistics,
   risk_level: '',
-  safety_notes: '',
-  mobility_accessibility: '',
+  safety_notes: [] as string[],
   emergency_guidance: '',
   images: [] as string[],
   booking_url: '',
@@ -110,7 +122,8 @@ const emptyForm = {
 type FormState = typeof emptyForm
 
 const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean)
-const joinLines = (arr?: string[]) => (arr ?? []).join('\n')
+// Lists are always sent, so removing every item clears them.
+const listPayload = (items: string[]) => cleanItems(items)
 
 function toFormState(exp?: Partial<Experience>): FormState {
   if (!exp) return emptyForm
@@ -159,19 +172,23 @@ function toFormState(exp?: Partial<Experience>): FormState {
     recurrence_end_date: exp.recurrence_end_date ?? '',
     recurrence_count: exp.recurrence_count != null ? String(exp.recurrence_count) : '',
     is_featured: exp.is_featured ?? false,
-    what_you_will_do: joinLines(exp.what_you_will_do),
-    whats_included: joinLines(exp.whats_included),
-    whats_not_included: joinLines(exp.whats_not_included),
+    // Listings the backfill hasn't reached yet start from the older fields.
+    highlights: exp.highlights ?? (exp.what_you_will_do ?? []).slice(0, 5),
+    whats_included: exp.whats_included ?? [],
+    whats_not_included: exp.whats_not_included ?? [],
+    what_to_bring_items: exp.what_to_bring_items ?? lines(exp.what_to_bring ?? ''),
+    not_suitable_for: exp.not_suitable_for ?? [],
+    know_before_you_go: exp.know_before_you_go ?? [],
+    refund_policy: exp.refund_policy ?? '',
+    free_cancellation_hours: exp.free_cancellation_hours != null ? String(exp.free_cancellation_hours) : '',
     cancellation_policy: exp.cancellation_policy ?? '',
+    meeting_landmark: exp.meeting_landmark ?? '',
+    meeting_photo_url: exp.meeting_photo_url ?? '',
     meeting_instructions: exp.meeting_instructions ?? '',
-    what_to_bring: exp.what_to_bring ?? '',
     itinerary: (exp.itinerary ?? []).map((step) => ({ title: step.title, description: step.description ?? '' })),
-    fitness_level: exp.requirements?.fitness_level ?? '',
-    age: exp.requirements?.age ?? '',
-    accessibility: exp.requirements?.accessibility ?? '',
+    fit: toFitLogistics(exp),
     risk_level: exp.safety_info?.riskLevel ?? '',
-    safety_notes: joinLines(exp.safety_info?.notes),
-    mobility_accessibility: exp.safety_info?.mobilityAccessibility ?? '',
+    safety_notes: exp.safety_info?.notes ?? [],
     emergency_guidance: exp.safety_info?.emergencyGuidance ?? '',
     // Older experiences only have a cover.
     images: exp.images?.length ? exp.images : (exp.cover_image_url ? [exp.cover_image_url] : []),
@@ -232,6 +249,10 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
   const minGuests = Number(form.group_size_min || 1)
   const groupSizeInvalid = !Number.isInteger(minGuests) || minGuests < 1
     || (!!form.group_size_max && minGuests > Number(form.group_size_max))
+  // Rules itin enforces on save, checked here so the button says why.
+  const detailsProblem = fitLogisticsProblem(form.fit)
+    ?? (form.refund_policy === 'full_refund_until' && !form.free_cancellation_hours
+      ? 'Add how many hours before the start guests can cancel for a full refund.' : null)
   // Upcoming bookings the last save would strand; the admin is asked to confirm.
   const [strandedBookings, setStrandedBookings] = useState<number | null>(null)
 
@@ -295,25 +316,31 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
         cover_image_url: form.images[0] || undefined,
         images: form.images,
         booking_url: form.booking_url || undefined,
-        what_you_will_do: lines(form.what_you_will_do).length ? lines(form.what_you_will_do) : undefined,
-        whats_included: lines(form.whats_included).length ? lines(form.whats_included) : undefined,
-        whats_not_included: lines(form.whats_not_included).length ? lines(form.whats_not_included) : undefined,
+        // what_you_will_do, what_to_bring and requirements are left out on
+        // purpose: older apps still read them, so saving here mustn't clear them.
+        highlights: listPayload(form.highlights),
+        whats_included: listPayload(form.whats_included),
+        whats_not_included: listPayload(form.whats_not_included),
+        what_to_bring_items: listPayload(form.what_to_bring_items),
+        not_suitable_for: listPayload(form.not_suitable_for),
+        know_before_you_go: listPayload(form.know_before_you_go),
+        refund_policy: form.refund_policy || undefined,
+        free_cancellation_hours: form.refund_policy === 'full_refund_until' && form.free_cancellation_hours
+          ? Number(form.free_cancellation_hours) : undefined,
         cancellation_policy: form.cancellation_policy || undefined,
+        meeting_landmark: form.meeting_landmark.trim() || undefined,
+        meeting_photo_url: form.meeting_photo_url || undefined,
         meeting_instructions: form.meeting_instructions || undefined,
-        what_to_bring: form.what_to_bring || undefined,
+        ...fitLogisticsPayload(form.fit),
         // Always sent, so removing every step clears the itinerary.
         itinerary: form.itinerary
           .map((step) => ({ title: step.title.trim(), description: step.description?.trim() || undefined }))
           .filter((step) => step.title),
-        requirements: (form.fitness_level || form.age || form.accessibility) ? {
-          fitness_level: form.fitness_level || undefined,
-          age: form.age || undefined,
-          accessibility: form.accessibility || undefined,
-        } : undefined,
         safety_info: form.risk_level ? {
           riskLevel: form.risk_level,
-          notes: lines(form.safety_notes),
-          mobilityAccessibility: form.mobility_accessibility || 'UNKNOWN',
+          notes: cleanItems(form.safety_notes),
+          // No longer edited (replaced by Accessibility); kept for older apps.
+          mobilityAccessibility: initialValues?.safety_info?.mobilityAccessibility,
           emergencyGuidance: form.emergency_guidance || undefined,
         } : undefined,
       }
@@ -365,6 +392,10 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
   ) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
   const setMulti = (field: 'interest_tags' | 'social_style') => (next: string[]) => setForm((f) => ({ ...f, [field]: next }))
+  type ListField = 'highlights' | 'whats_included' | 'whats_not_included' | 'what_to_bring_items'
+    | 'not_suitable_for' | 'know_before_you_go' | 'safety_notes'
+  const setList = (field: ListField) => (next: string[]) => setForm((f) => ({ ...f, [field]: next }))
+  const setFit = (patch: Partial<FitLogistics>) => setForm((f) => ({ ...f, fit: { ...f.fit, ...patch } }))
 
   const setStartTime = (index: number, next: string) => setForm((f) => {
     const times = f.start_times.length ? [...f.start_times] : ['']
@@ -458,8 +489,10 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           </Row>
           <Form.Group className="mb-3">
             <Form.Label>Description</Form.Label>
-            <Form.Control as="textarea" rows={3} value={form.description} onChange={setDescription} />
-            <Form.Text className="text-muted">{countWords(form.description)}/{MAX_DESCRIPTION_WORDS} words</Form.Text>
+            <Form.Control as="textarea" rows={6} value={form.description} onChange={setDescription} />
+            <Form.Text className="text-muted">
+              {countWords(form.description)}/{MAX_DESCRIPTION_WORDS} words. Leave a blank line between paragraphs.
+            </Form.Text>
           </Form.Group>
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Location</h6>
@@ -516,8 +549,25 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             </Col>
           </Row>
           <Form.Text className="text-muted d-block mb-3">
-            The pin is where travellers meet you. The listing only shows the area; the exact pin goes to travellers once they&apos;ve booked.
+            The pin is where guests meet you. The listing only shows the area; the exact pin goes to guests once they&apos;ve booked.
           </Form.Text>
+          <Form.Group className="mb-3">
+            <Form.Label>Meeting landmark *</Form.Label>
+            <Form.Control
+              value={form.meeting_landmark}
+              maxLength={120}
+              onChange={set('meeting_landmark')}
+              placeholder="e.g. The blue gate opposite the Marina steps"
+            />
+            <Form.Text className="text-muted">
+              Public. How guests spot the meeting point before they book. {form.meeting_landmark.length}/120
+            </Form.Text>
+          </Form.Group>
+          <MeetingPhotoField
+            url={form.meeting_photo_url}
+            onChange={(meeting_photo_url) => setForm((f) => ({ ...f, meeting_photo_url }))}
+            onUploadingChange={setIsUploadingImages}
+          />
           <Form.Group className="mb-3">
             <Form.Label>Meeting instructions (optional)</Form.Label>
             <Form.Control
@@ -528,7 +578,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
               onChange={set('meeting_instructions')}
               placeholder="e.g. Wait by the blue gate at the jetty and call on arrival"
             />
-            <Form.Text className="text-muted">Only travellers with a confirmed booking see this.</Form.Text>
+            <Form.Text className="text-muted">Private: only guests with a confirmed booking see this.</Form.Text>
           </Form.Group>
 
           <div className="d-flex justify-content-between align-items-baseline mb-3 mt-4">
@@ -582,7 +632,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Max group size</Form.Label>
+                <Form.Label>Max group size *</Form.Label>
                 <Form.Control type="number" min={1} value={form.group_size_max} onChange={set('group_size_max')} />
               </Form.Group>
             </Col>
@@ -818,69 +868,90 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
             </Col>
           </Row>
 
-          <h6 className="text-uppercase text-muted small mb-3 mt-4">What Travellers Get</h6>
+          <FitLogisticsSection value={form.fit} onChange={setFit} />
+
+          <h6 className="text-uppercase text-muted small mb-3 mt-4">What guests get</h6>
+          <ListItemsField
+            label="Highlights"
+            items={form.highlights}
+            onChange={setList('highlights')}
+            maxItems={5}
+            placeholder="e.g. Paddle the lagoon at sunrise"
+          />
           <Row>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>What you&apos;ll do (optional)</Form.Label>
-                <Form.Control as="textarea" rows={3} value={form.what_you_will_do} onChange={set('what_you_will_do')} placeholder="One item per line" />
-              </Form.Group>
+            <Col md={6}>
+              <ListItemsField label="What's included" items={form.whats_included} onChange={setList('whats_included')} maxItems={10} />
             </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>What&apos;s included</Form.Label>
-                <Form.Control as="textarea" rows={3} value={form.whats_included} onChange={set('whats_included')} placeholder="One item per line" />
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>What&apos;s not included</Form.Label>
-                <Form.Control as="textarea" rows={3} value={form.whats_not_included} onChange={set('whats_not_included')} placeholder="One item per line" />
-              </Form.Group>
+            <Col md={6}>
+              <ListItemsField label="What's not included" items={form.whats_not_included} onChange={setList('whats_not_included')} maxItems={10} />
             </Col>
           </Row>
           <ItineraryField
             steps={form.itinerary}
             onChange={(itinerary) => setForm((f) => ({ ...f, itinerary }))}
           />
-          <Form.Group className="mb-3">
-            <Form.Label>What to bring (optional)</Form.Label>
-            <Form.Control
-              as="textarea"
-              rows={2}
-              maxLength={1000}
-              value={form.what_to_bring}
-              onChange={set('what_to_bring')}
-              placeholder="e.g. Swimwear, sunscreen and a change of clothes"
-            />
-            <Form.Text className="text-muted">Sent with the booking and the day-of reminder.</Form.Text>
-          </Form.Group>
-          <Form.Group className="mb-3">
-            <Form.Label>Cancellation policy</Form.Label>
-            <Form.Control as="textarea" rows={2} value={form.cancellation_policy} onChange={set('cancellation_policy')} />
-          </Form.Group>
-
-          <h6 className="text-uppercase text-muted small mb-3 mt-4">Requirements (optional)</h6>
+          <ListItemsField
+            label="What to bring"
+            items={form.what_to_bring_items}
+            onChange={setList('what_to_bring_items')}
+            maxItems={15}
+            placeholder="e.g. Sunscreen"
+            help="Also sent with the booking and the day-of reminder."
+          />
           <Row>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Fitness level</Form.Label>
-                <Form.Control value={form.fitness_level} onChange={set('fitness_level')} />
-              </Form.Group>
+            <Col md={6}>
+              <ListItemsField
+                label="Not suitable for"
+                items={form.not_suitable_for}
+                onChange={setList('not_suitable_for')}
+                maxItems={10}
+                placeholder="e.g. Guests who can't swim"
+              />
             </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Age</Form.Label>
-                <Form.Control value={form.age} onChange={set('age')} />
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Accessibility</Form.Label>
-                <Form.Control value={form.accessibility} onChange={set('accessibility')} />
-              </Form.Group>
+            <Col md={6}>
+              <ListItemsField
+                label="Know before you go"
+                items={form.know_before_you_go}
+                onChange={setList('know_before_you_go')}
+                maxItems={10}
+                placeholder="e.g. The start is at 6:00am"
+              />
             </Col>
           </Row>
+
+          <h6 className="text-uppercase text-muted small mb-3 mt-4">Cancellation</h6>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Refund policy</Form.Label>
+                <Form.Select value={form.refund_policy} onChange={setSelect('refund_policy')}>
+                  <option value="">Select…</option>
+                  {REFUND_POLICY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            {form.refund_policy === 'full_refund_until' && (
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Hours before the start</Form.Label>
+                  <Form.Control
+                    type="number"
+                    min={0}
+                    max={720}
+                    value={form.free_cancellation_hours}
+                    onChange={set('free_cancellation_hours')}
+                    placeholder="24"
+                  />
+                  <Form.Text className="text-muted">The page shows the exact date and time this falls on for each session.</Form.Text>
+                </Form.Group>
+              </Col>
+            )}
+          </Row>
+          <Form.Group className="mb-3">
+            <Form.Label>Policy details (optional)</Form.Label>
+            <Form.Control as="textarea" rows={2} value={form.cancellation_policy} onChange={set('cancellation_policy')} />
+            <Form.Text className="text-muted">Extra detail shown with the policy. Refunds are always actioned by an admin.</Form.Text>
+          </Form.Group>
 
           <h6 className="text-uppercase text-muted small mb-3 mt-4">Safety Info (optional)</h6>
           <Row>
@@ -893,22 +964,10 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
                 </Form.Select>
               </Form.Group>
             </Col>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Mobility accessibility</Form.Label>
-                <Form.Select value={form.mobility_accessibility} onChange={setSelect('mobility_accessibility')}>
-                  <option value="">UNKNOWN</option>
-                  {MOBILITY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
           </Row>
           <Row>
             <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Safety notes</Form.Label>
-                <Form.Control as="textarea" rows={2} value={form.safety_notes} onChange={set('safety_notes')} placeholder="One item per line" />
-              </Form.Group>
+              <ListItemsField label="Safety notes" items={form.safety_notes} onChange={setList('safety_notes')} maxItems={8} />
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
@@ -927,7 +986,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
               <Form.Group className="mb-3">
                 <Form.Label>Booking URL</Form.Label>
                 <Form.Control value={form.booking_url} onChange={set('booking_url')} placeholder="https://…" />
-                <Form.Text className="text-muted">External link where travelers complete booking for this experience (e.g. Viator, GetYourGuide, or the guide&apos;s own booking page).</Form.Text>
+                <Form.Text className="text-muted">External link where guests complete booking (e.g. Viator, GetYourGuide, or the guide&apos;s own booking page). The page then hides its booking card.</Form.Text>
               </Form.Group>
             </Col>
           </Row>
@@ -942,8 +1001,9 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
           )}
 
           {pricingProblem && <Alert variant="warning" className="small py-2 mt-3">{pricingProblem}</Alert>}
+          {detailsProblem && <Alert variant="warning" className="small py-2 mt-3">{detailsProblem}</Alert>}
           <div className="d-flex gap-2 pt-2">
-            <Button variant="primary" disabled={!form.title || groupSizeInvalid || !!pricingProblem || isPending || isUploadingImages} onClick={() => mutate({})}>
+            <Button variant="primary" disabled={!form.title || groupSizeInvalid || !!pricingProblem || !!detailsProblem || isPending || isUploadingImages} onClick={() => mutate({})}>
               {isPending ? <Spinner size="sm" /> : (mode === 'edit' ? 'Save changes' : 'Create')}
             </Button>
             <Button variant="outline-secondary" onClick={() => router.back()}>Cancel</Button>
