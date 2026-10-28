@@ -32,6 +32,8 @@ import FitLogisticsSection, {
 } from './FitLogisticsSection'
 import ListItemsField, { cleanItems } from './ListItemsField'
 import MeetingPhotoField from './MeetingPhotoField'
+import NeedsDetailsPanel from './NeedsDetailsPanel'
+import { missingForPublish } from '@/utils/publish'
 
 // The "Category" select writes one of these into headline; the mobile app groups
 // experiences by it. Interest tags come from the live interest categories instead.
@@ -249,6 +251,17 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
   const minGuests = Number(form.group_size_min || 1)
   const groupSizeInvalid = !Number.isInteger(minGuests) || minGuests < 1
     || (!!form.group_size_max && minGuests > Number(form.group_size_max))
+  // The publish checklist, from what's on the form now, so it updates as they type.
+  const missingDetails = missingForPublish({
+    fitness_level: form.fit.fitness_level,
+    age_policy: form.fit.age_policy,
+    accessibility: form.fit.accessibility,
+    group_size_max: form.group_size_max,
+    meeting_landmark: form.meeting_landmark,
+    latitude: form.latitude,
+    longitude: form.longitude,
+    photos: form.images.length,
+  })
   // Rules itin enforces on save, checked here so the button says why.
   const detailsProblem = fitLogisticsProblem(form.fit)
     ?? (form.refund_policy === 'full_refund_until' && !form.free_cancellation_hours
@@ -466,6 +479,11 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h4 className="mb-0">{mode === 'edit' ? 'Edit Experience' : 'Create Experience'}</h4>
       </div>
+
+      <NeedsDetailsPanel missing={missingDetails} live={initialValues?.status === 'ACTIVE'} />
+      {mode === 'create' && missingDetails.length > 0 && (
+        <p className="small text-muted">You can create it now; it&apos;s saved as inactive until these are added.</p>
+      )}
 
       <Card>
         <CardBody>

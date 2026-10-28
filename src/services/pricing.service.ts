@@ -5,6 +5,7 @@ type Money = string | number
 
 export type TicketUnit = 'per_person' | 'per_booking' | 'per_day'
 export type AddonUnit = 'per_booking' | 'per_person'
+export type GuestType = 'adult' | 'child' | 'student' | 'other'
 
 export interface TicketType {
   id: string
@@ -15,6 +16,8 @@ export interface TicketType {
   pricing_unit: TicketUnit
   // False when archived: kept on past bookings, no longer sold.
   is_active?: boolean
+  // Who the ticket is for; null for a plain ticket such as "Standard".
+  guest_type?: GuestType | null
 }
 
 export interface Addon {
@@ -30,6 +33,7 @@ export interface Addon {
 export interface PriceRule {
   id: string
   experience_id: string
+  // early_bird: events only now; older experience rules still come back.
   kind: 'early_bird' | 'day_of_week' | 'group'
   experience_price_id?: string | null
   label?: string | null
