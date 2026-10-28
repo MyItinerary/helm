@@ -526,7 +526,7 @@ function PricingSections({
       )}
       {on.archiveTicket && (
         <p className="small text-muted">
-          A ticket type that has bookings can&apos;t be deleted. Archive it instead: customers stop seeing it, and past bookings keep it.
+          A guest type that has bookings can&apos;t be deleted. Archive it instead: customers stop seeing it, and past bookings keep it.
         </p>
       )}
       {archived.length > 0 && (

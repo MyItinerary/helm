@@ -601,7 +601,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
 
           <div className="d-flex justify-content-between align-items-baseline mb-3 mt-4">
             <h6 className="text-uppercase text-muted small mb-0">Pricing &amp; Logistics</h6>
-            <a href="#pricing" className="small">Ticket types, add-ons &amp; discounts ↓</a>
+            <a href="#pricing" className="small">Guest types, add-ons &amp; discounts ↓</a>
           </div>
           <Row>
             <Col md={4}>
