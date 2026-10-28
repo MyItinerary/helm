@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   apiErrorDetail, pricingService,
-  type AddonUnit, type PriceRule, type TicketUnit,
+  type AddonUnit, type GuestType, type PriceRule, type TicketUnit,
 } from '@/services/pricing.service'
 
 const TICKET_UNITS: { value: TicketUnit; label: string }[] = [
@@ -52,18 +52,20 @@ function countsGuests(tickets: { pricing_unit: string }[]) {
   return tickets.some((t) => t.pricing_unit === 'per_person' || t.pricing_unit === 'per_day')
 }
 
+// Early bird is for events only (itin refuses new ones on experiences); it stays
+// in RULE_KINDS so older rules still display.
 function ruleKindsFor(context: PricingContext, tickets: { pricing_unit: string }[]) {
   return RULE_KINDS.filter((k) => (
     k.value === 'group' ? countsGuests(tickets)
-      : k.value === 'early_bird' ? context.dated
-        : context.recurring
+      : k.value === 'day_of_week' ? context.recurring
+        : false
   ))
 }
 
 // Why a rule doesn't fit the experience as it's set up now, if it doesn't.
 function ruleMismatch(rule: Pick<PriceRule, 'kind'>, context: PricingContext, tickets: { pricing_unit: string }[]) {
   if (rule.kind === 'group' && !countsGuests(tickets)) return 'No ticket is priced per guest, so this never applies.'
-  if (rule.kind === 'early_bird' && !context.dated) return 'The experience has no dated sessions to book ahead of.'
+  if (rule.kind === 'early_bird') return 'Early bird is for events now. Delete this rule; it can\'t be turned back on.'
   if (rule.kind === 'day_of_week' && !context.recurring) return 'The experience doesn\'t repeat, so every session is on the same day.'
   return null
 }
@@ -87,19 +89,37 @@ function describeRule(rule: Partial<PriceRule>, tickets: TicketRef[], currency: 
   return `${money(rule.unit_amount ?? 0, currency)} on ${days}${scope}`
 }
 
-type PriceDraft = { label: string; description: string; amount: string; pricing_unit: string }
+// guest_type: tickets only; '' is a plain ticket such as "Standard".
+type PriceDraft = { label: string; description: string; amount: string; pricing_unit: string; guest_type?: string }
 type PriceItem = {
   label: string
   description?: string | null
   amount: string | number
   pricing_unit: string
+  guest_type?: string | null
+}
+
+const GUEST_TYPES = [
+  { value: 'adult', label: 'Adult' },
+  { value: 'child', label: 'Child' },
+  { value: 'student', label: 'Student' },
+  { value: 'other', label: 'Other' },
+]
+
+function GuestTypeSelect({ value, onChange, label }: { value: string, onChange: (v: string) => void, label: string }) {
+  return (
+    <Form.Select size="sm" className="mt-1" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Any guest</option>
+      {GUEST_TYPES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+    </Form.Select>
+  )
 }
 
 // A ticket type or add-on row, editable in place. The description is shown to
 // customers under the label in the booking panel. With `instant`, every change
 // is reported straight away (a draft that isn't saved yet) and there's no Save.
 function PriceRow({
-  item, units, currency, onSave, onDelete, onArchive, onTogglePause, paused, saving, instant,
+  item, units, currency, onSave, onDelete, onArchive, onTogglePause, paused, saving, instant, guestTypes,
 }: {
   item: PriceItem
   units: { value: string; label: string }[]
@@ -113,8 +133,11 @@ function PriceRow({
   paused?: boolean
   saving: boolean
   instant?: boolean
+  // Tickets only: who the ticket is for.
+  guestTypes?: boolean
 }) {
   const [label, setLabel] = useState(item.label)
+  const [guestType, setGuestType] = useState(item.guest_type ?? '')
   const [description, setDescription] = useState(item.description ?? '')
   const [amount, setAmount] = useState(item.amount === '' ? '' : String(Number(item.amount)))
   const [unit, setUnit] = useState<string>(item.pricing_unit)
@@ -122,12 +145,14 @@ function PriceRow({
     || description !== (item.description ?? '')
     || Number(amount) !== Number(item.amount)
     || unit !== item.pricing_unit
+    || guestType !== (item.guest_type ?? '')
   const change = (next: Partial<PriceDraft>) => {
-    const draft = { label, description, amount, pricing_unit: unit, ...next }
+    const draft = { label, description, amount, pricing_unit: unit, guest_type: guestType, ...next }
     if (next.label !== undefined) setLabel(next.label)
     if (next.description !== undefined) setDescription(next.description)
     if (next.amount !== undefined) setAmount(next.amount)
     if (next.pricing_unit !== undefined) setUnit(next.pricing_unit)
+    if (next.guest_type !== undefined) setGuestType(next.guest_type)
     if (instant) onSave({ ...draft, label: draft.label.trim(), description: draft.description.trim() })
   }
 
@@ -143,6 +168,7 @@ function PriceRow({
           value={description}
           onChange={(e) => change({ description: e.target.value })}
         />
+        {guestTypes && <GuestTypeSelect label="Guest type" value={guestType} onChange={(guest_type) => change({ guest_type })} />}
         {paused && <Badge bg="secondary" className="mt-1">Paused: not offered to customers</Badge>}
       </td>
       <td>
@@ -170,7 +196,9 @@ function PriceRow({
             variant="primary"
             className="me-2"
             disabled={!dirty || !label.trim() || amount === '' || saving}
-            onClick={() => onSave({ label: label.trim(), description: description.trim(), amount, pricing_unit: unit })}
+            onClick={() => onSave({
+              label: label.trim(), description: description.trim(), amount, pricing_unit: unit, guest_type: guestType,
+            })}
           >
             Save
           </Button>
@@ -199,14 +227,16 @@ function PriceRow({
 }
 
 function AddPriceRow({
-  units, defaultUnit, placeholder, onAdd, saving,
+  units, defaultUnit, placeholder, onAdd, saving, guestTypes,
 }: {
   units: { value: string; label: string }[]
   defaultUnit: string
   placeholder: string
   onAdd: (data: PriceDraft) => Promise<boolean>
   saving: boolean
+  guestTypes?: boolean
 }) {
+  const [guestType, setGuestType] = useState('')
   const [label, setLabel] = useState('')
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
@@ -224,6 +254,7 @@ function AddPriceRow({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
+        {guestTypes && <GuestTypeSelect label="New guest type" value={guestType} onChange={setGuestType} />}
       </td>
       <td>
         <Form.Select size="sm" value={unit} onChange={(e) => setUnit(e.target.value)}>
@@ -236,8 +267,11 @@ function AddPriceRow({
           size="sm"
           variant="outline-primary"
           disabled={!label.trim() || amount === '' || saving}
-          onClick={() => onAdd({ label: label.trim(), description: description.trim(), amount, pricing_unit: unit }).then((ok) => {
+          onClick={() => onAdd({
+            label: label.trim(), description: description.trim(), amount, pricing_unit: unit, guest_type: guestType,
+          }).then((ok) => {
             if (!ok) return
+            setGuestType('')
             setLabel('')
             setDescription('')
             setAmount('')
@@ -323,8 +357,8 @@ function RuleForm({
   if (!kind) {
     return (
       <p className="small text-muted fst-italic mt-3 mb-0">
-        No discounts fit this experience yet: a group discount needs a ticket priced per guest, an early-bird price
-        needs dated sessions, and a day-of-week rate needs a repeating schedule.
+        No discounts fit this experience yet: a group discount needs a ticket priced per guest, and a day-of-week rate
+        needs a repeating schedule. For a time-limited offer, use a promo code.
       </p>
     )
   }
@@ -452,22 +486,23 @@ function PricingSections({
   return (
     <>
       <p className="small text-muted">
-        Ticket types customers choose from (e.g. Adult, Child, Student). An experience needs at least one to be bookable.
+        Guest types customers choose from (e.g. Adult, Child, Student), each with its own price. An experience needs at least one to be bookable.
         {context.multiDay && ' Sessions last several days, so a ticket can be charged per person, per day.'}
       </p>
       <Table size="sm" className="align-middle">
         <thead>
-          <tr><th>Ticket type</th><th style={{ width: 200 }}>Charged</th><th style={{ width: 180 }}>Price</th><th /></tr>
+          <tr><th>Guest type</th><th style={{ width: 200 }}>Charged</th><th style={{ width: 180 }}>Price</th><th /></tr>
         </thead>
         <tbody>
           {tickets.map((t) => (
             <PriceRow
-              key={instant ? t.id : `${t.id}-${t.amount}-${t.label}-${t.pricing_unit}-${t.description ?? ''}`}
+              key={instant ? t.id : `${t.id}-${t.amount}-${t.label}-${t.pricing_unit}-${t.description ?? ''}-${t.guest_type ?? ''}`}
               item={t}
               units={ticketUnitsFor(context, t.pricing_unit)}
               currency={currency}
               saving={saving}
               instant={instant}
+              guestTypes
               onSave={(d) => on.saveTicket(t, d)}
               onArchive={on.archiveTicket && (() => on.archiveTicket?.(t))}
               onDelete={() => on.deleteTicket(t)}
@@ -478,6 +513,7 @@ function PricingSections({
             defaultUnit="per_person"
             placeholder="e.g. Adult"
             saving={saving}
+            guestTypes
             onAdd={on.addTicket}
           />
         </tbody>
@@ -490,7 +526,7 @@ function PricingSections({
       )}
       {on.archiveTicket && (
         <p className="small text-muted">
-          A ticket type that has bookings can&apos;t be deleted. Archive it instead: customers stop seeing it, and past bookings keep it.
+          A guest type that has bookings can&apos;t be deleted. Archive it instead: customers stop seeing it, and past bookings keep it.
         </p>
       )}
       {archived.length > 0 && (
@@ -544,7 +580,7 @@ function PricingSections({
 
       <h6 className="mt-4">Discounts &amp; pricing rules</h6>
       <p className="small text-muted">
-        Group discounts, early-bird prices and weekday/weekend rates. Discounts don&apos;t stack: the customer gets the single biggest one they qualify for (early-bird, group or promo code). A group discount counts every ticket type together, and doesn&apos;t stop smaller bookings; for that, set the experience&apos;s min group size.
+        Group discounts and weekday/weekend rates. Discounts don&apos;t stack: the customer gets the single biggest one they qualify for (group, day-of-week or promo code). A group discount counts every ticket type together, and doesn&apos;t stop smaller bookings; for that, set the experience&apos;s min group size.
       </p>
       {rules.length === 0 ? (
         <p className="small text-muted fst-italic">No rules.</p>
@@ -553,6 +589,7 @@ function PricingSections({
           {rules.map((r) => {
             const mismatch = ruleMismatch(r, context, tickets)
             const paused = r.is_active === false
+            const earlyBird = r.kind === 'early_bird'
             return editingRuleId === r.id ? (
               <li key={r.id} className="border-bottom pb-2">
                 <RuleForm
@@ -576,14 +613,16 @@ function PricingSections({
                   {mismatch && <span className="d-block small text-warning">{mismatch}</span>}
                 </span>
                 <span className="text-nowrap">
-                  {on.toggleRule && (
+                  {on.toggleRule && !(earlyBird && paused) && (
                     <Button size="sm" variant="outline-secondary" className="me-2" disabled={saving} onClick={() => on.toggleRule?.(r)}>
                       {paused ? 'Turn on' : 'Pause'}
                     </Button>
                   )}
-                  <Button size="sm" variant="outline-secondary" className="me-2" disabled={saving} onClick={() => setEditingRuleId(r.id)}>
-                    Edit
-                  </Button>
+                  {!earlyBird && (
+                    <Button size="sm" variant="outline-secondary" className="me-2" disabled={saving} onClick={() => setEditingRuleId(r.id)}>
+                      Edit
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline-danger" disabled={saving} onClick={() => on.deleteRule(r)}>
                     Delete
                   </Button>
@@ -631,7 +670,7 @@ export function pricingDraftPayload(draft: PricingDraft) {
   const strip = ({ label, description, amount, pricing_unit }: PriceItem) =>
     ({ label, description: description || null, amount, pricing_unit })
   return {
-    prices: draft.tickets.map(strip),
+    prices: draft.tickets.map((t) => ({ ...strip(t), guest_type: t.guest_type || null })),
     addons: draft.addons.map(strip),
     price_rules: draft.rules.map(({ id: _id, experience_price_id, ...rule }) => {
       const index = draft.tickets.findIndex((t) => t.id === experience_price_id)
@@ -650,7 +689,9 @@ export function PricingDraftEditor({
   context: PricingContext
 }) {
   const update = (patch: Partial<PricingDraft>) => onChange({ ...value, ...patch })
-  const fromDraft = (d: PriceDraft) => ({ label: d.label, description: d.description, amount: d.amount, pricing_unit: d.pricing_unit })
+  const fromDraft = (d: PriceDraft) => ({
+    label: d.label, description: d.description, amount: d.amount, pricing_unit: d.pricing_unit, guest_type: d.guest_type ?? '',
+  })
 
   return (
     <div id="pricing" className="mt-4">
@@ -759,8 +800,13 @@ export default function ExperiencePricingManager({
   const tickets = allTickets.filter((t) => t.is_active !== false)
   const archived = allTickets.filter((t) => t.is_active === false)
   // An empty description clears it.
-  const toTicket = (d: PriceDraft) =>
-    ({ label: d.label, description: d.description || null, amount: d.amount, pricing_unit: d.pricing_unit as TicketUnit })
+  const toTicket = (d: PriceDraft) => ({
+    label: d.label,
+    description: d.description || null,
+    amount: d.amount,
+    pricing_unit: d.pricing_unit as TicketUnit,
+    guest_type: (d.guest_type || null) as GuestType | null,
+  })
   const toAddon = (d: PriceDraft) =>
     ({ label: d.label, description: d.description || null, amount: d.amount, pricing_unit: d.pricing_unit as AddonUnit })
 

@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { experienceService } from '@/services/experience.service'
 import StatusBadge from '@/components/ui/StatusBadge'
+import { describeMissing, missingFromError } from '@/utils/publish'
 import { formatRecurrenceSummary } from '@/utils/recurrence'
 import { formatTime12h } from '@/utils/time'
 import { formatPriceFrom, formatTimes, timezoneLabel } from '@/utils/schedule'
@@ -217,7 +218,10 @@ export default function ExperiencesPage() {
       toast.success('Status updated')
       queryClient.invalidateQueries({ queryKey: ['experiences'] })
     },
-    onError: () => toast.error('Update failed'),
+    onError: (error) => {
+      const missing = missingFromError(error)
+      toast.error(missing ? `Add these before publishing: ${describeMissing(missing)}` : 'Update failed')
+    },
   })
 
   const nextStatus = (current: string): 'ACTIVE' | 'INACTIVE' => (current === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')
@@ -297,7 +301,14 @@ export default function ExperiencesPage() {
                     <td className="text-muted small">{exp.guide?.display_name ?? exp.guide_id}</td>
                     <td>{[exp.city, exp.country].filter(Boolean).join(', ') || '—'}</td>
                     <td>{formatPriceFrom(exp)}</td>
-                    <td><StatusBadge status={exp.status} /></td>
+                    <td>
+                      <StatusBadge status={exp.status} />
+                      {!!exp.missing_for_publish?.length && (
+                        <Badge bg="warning" text="dark" className="ms-1" title={describeMissing(exp.missing_for_publish)}>
+                          Needs details
+                        </Badge>
+                      )}
+                    </td>
                     <td className="text-muted small">{new Date(exp.created_at).toLocaleDateString()}</td>
                     <td>
                       <div className="d-flex gap-2">
