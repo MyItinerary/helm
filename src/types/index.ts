@@ -108,9 +108,19 @@ export interface SafetyInfo {
   riskLevel: string
   notes: string[]
   recommendedTimeOfDay?: string
-  mobilityAccessibility: string
+  // Replaced by Experience.accessibility; older listings still have it.
+  mobilityAccessibility?: string
   emergencyGuidance?: string
 }
+
+export type FitnessLevel = 'easy' | 'moderate' | 'high' | 'very_high' | 'not_applicable'
+export type AgePolicy = 'all_ages' | 'minimum_age' | 'adult_required_under' | 'adults_only'
+export type Accessibility = 'wheelchair_accessible' | 'partly_accessible' | 'not_suitable' | 'not_confirmed'
+export type RefundPolicy = 'full_refund_until' | 'non_refundable' | 'custom'
+
+// Keys of itin's publish checklist (missing_for_publish), in form order.
+export type PublishChecklistItem =
+  | 'fitness' | 'age' | 'accessibility' | 'max_group_size' | 'meeting_landmark' | 'pin' | 'photo'
 
 export interface Experience {
   id: string
@@ -171,10 +181,34 @@ export interface Experience {
   requirements?: ExperienceRequirements
   safety_info?: SafetyInfo
   cancellation_policy?: string
-  // Shown to travellers only once they've booked.
+  // Shown to guests only once they've booked.
   meeting_instructions?: string | null
   what_to_bring?: string | null
   itinerary?: ItineraryStep[] | null
+  // Fit and logistics
+  fitness_level?: FitnessLevel | null
+  fitness_note?: string | null
+  age_policy?: AgePolicy | null
+  min_age?: number | null
+  age_note?: string | null
+  accessibility?: Accessibility | null
+  accessibility_note?: string | null
+  languages?: string[] | null
+  weather_dependent?: boolean
+  pickup_available?: boolean
+  pickup_note?: string | null
+  // Public, unlike meeting_instructions.
+  meeting_landmark?: string | null
+  meeting_photo_url?: string | null
+  // One item per entry; highlights replaces what_you_will_do.
+  highlights?: string[] | null
+  what_to_bring_items?: string[] | null
+  not_suitable_for?: string[] | null
+  know_before_you_go?: string[] | null
+  refund_policy?: RefundPolicy | null
+  free_cancellation_hours?: number | null
+  // Admin responses: what the publish checklist still needs.
+  missing_for_publish?: PublishChecklistItem[] | null
   created_at: string
   updated_at?: string
 }
