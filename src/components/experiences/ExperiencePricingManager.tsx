@@ -39,6 +39,8 @@ export interface PricingContext {
   dated: boolean
   // It repeats, so sessions fall on different weekdays.
   recurring: boolean
+  // The age policy is adults only, so child tickets can't be sold (itin refuses them).
+  adultsOnly?: boolean
 }
 
 // Per-day tickets only make sense when a session lasts several days. A ticket
@@ -106,11 +108,20 @@ const GUEST_TYPES = [
   { value: 'other', label: 'Other' },
 ]
 
-function GuestTypeSelect({ value, onChange, label }: { value: string, onChange: (v: string) => void, label: string }) {
+function GuestTypeSelect({
+  value, onChange, label, adultsOnly,
+}: { value: string, onChange: (v: string) => void, label: string, adultsOnly?: boolean }) {
   return (
     <Form.Select size="sm" className="mt-1" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">Any guest</option>
-      {GUEST_TYPES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+      {GUEST_TYPES.map((g) => {
+        const blocked = adultsOnly && g.value === 'child' && value !== 'child'
+        return (
+          <option key={g.value} value={g.value} disabled={blocked}>
+            {blocked ? `${g.label} (adults-only listing)` : g.label}
+          </option>
+        )
+      })}
     </Form.Select>
   )
 }
@@ -119,7 +130,7 @@ function GuestTypeSelect({ value, onChange, label }: { value: string, onChange: 
 // customers under the label in the booking panel. With `instant`, every change
 // is reported straight away (a draft that isn't saved yet) and there's no Save.
 function PriceRow({
-  item, units, currency, onSave, onDelete, onArchive, onTogglePause, paused, saving, instant, guestTypes,
+  item, units, currency, onSave, onDelete, onArchive, onTogglePause, paused, saving, instant, guestTypes, adultsOnly,
 }: {
   item: PriceItem
   units: { value: string; label: string }[]
@@ -135,6 +146,7 @@ function PriceRow({
   instant?: boolean
   // Tickets only: who the ticket is for.
   guestTypes?: boolean
+  adultsOnly?: boolean
 }) {
   const [label, setLabel] = useState(item.label)
   const [guestType, setGuestType] = useState(item.guest_type ?? '')
@@ -168,7 +180,7 @@ function PriceRow({
           value={description}
           onChange={(e) => change({ description: e.target.value })}
         />
-        {guestTypes && <GuestTypeSelect label="Guest type" value={guestType} onChange={(guest_type) => change({ guest_type })} />}
+        {guestTypes && <GuestTypeSelect label="Guest type" value={guestType} adultsOnly={adultsOnly} onChange={(guest_type) => change({ guest_type })} />}
         {paused && <Badge bg="secondary" className="mt-1">Paused: not offered to customers</Badge>}
       </td>
       <td>
@@ -227,7 +239,7 @@ function PriceRow({
 }
 
 function AddPriceRow({
-  units, defaultUnit, placeholder, onAdd, saving, guestTypes,
+  units, defaultUnit, placeholder, onAdd, saving, guestTypes, adultsOnly,
 }: {
   units: { value: string; label: string }[]
   defaultUnit: string
@@ -235,6 +247,7 @@ function AddPriceRow({
   onAdd: (data: PriceDraft) => Promise<boolean>
   saving: boolean
   guestTypes?: boolean
+  adultsOnly?: boolean
 }) {
   const [guestType, setGuestType] = useState('')
   const [label, setLabel] = useState('')
@@ -254,7 +267,7 @@ function AddPriceRow({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
-        {guestTypes && <GuestTypeSelect label="New guest type" value={guestType} onChange={setGuestType} />}
+        {guestTypes && <GuestTypeSelect label="New guest type" value={guestType} adultsOnly={adultsOnly} onChange={setGuestType} />}
       </td>
       <td>
         <Form.Select size="sm" value={unit} onChange={(e) => setUnit(e.target.value)}>
@@ -503,6 +516,7 @@ function PricingSections({
               saving={saving}
               instant={instant}
               guestTypes
+              adultsOnly={context.adultsOnly}
               onSave={(d) => on.saveTicket(t, d)}
               onArchive={on.archiveTicket && (() => on.archiveTicket?.(t))}
               onDelete={() => on.deleteTicket(t)}
@@ -514,10 +528,16 @@ function PricingSections({
             placeholder="e.g. Adult"
             saving={saving}
             guestTypes
+            adultsOnly={context.adultsOnly}
             onAdd={on.addTicket}
           />
         </tbody>
       </Table>
+      {context.adultsOnly && tickets.some((t) => t.guest_type === 'child') && (
+        <p className="small text-danger">
+          The age policy is adults only, so the child ticket can&apos;t be booked. Archive it or change the age policy.
+        </p>
+      )}
       {tickets.length === 0 && (
         <p className="small text-danger">No ticket types on sale: customers can&apos;t book this experience.</p>
       )}

@@ -7,8 +7,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import {
-  apiErrorDetail, CANCELLING_KINDS, KIND_LABEL, money, refundService,
-  type RefundBookingSummary, type RefundDecision, type RefundRequest,
+  apiErrorDetail, CANCELLING_KINDS, KIND_LABEL, money, POLICY_LABEL, refundService,
+  type RefundBookingSummary, type RefundDecision, type RefundEstimate, type RefundRequest,
 } from '@/services/refund.service'
 
 type RefundMode = 'none' | 'full' | 'amount' | 'percent'
@@ -22,9 +22,12 @@ interface Props {
   bookingId?: string | null
 }
 
-function defaultMode(request?: RefundRequest | null): RefundMode {
+function defaultMode(request?: RefundRequest | null, estimate?: RefundEstimate | null): RefundMode {
   if (!request) return 'none'
-  return ['curator_cancellation', 'oversold', 'duplicate_payment'].includes(request.kind) ? 'full' : 'none'
+  if (['curator_cancellation', 'oversold', 'duplicate_payment'].includes(request.kind)) return 'full'
+  // A customer cancellation starts from what the policy gives; the admin can change it.
+  if (request.kind === 'customer_cancellation' && estimate?.eligible) return 'amount'
+  return 'none'
 }
 
 // The admin's refund decision. Every refund needs a written justification;
@@ -70,8 +73,13 @@ function DecisionForm({
   const refundable = Math.max(paid - refundedSoFar, 0)
   const isChargeRequest = request?.kind === 'duplicate_payment'
 
-  const [mode, setMode] = useState<RefundMode>(defaultMode(request))
-  const [amount, setAmount] = useState('')
+  const estimate = booking.refund_estimate
+  const [mode, setMode] = useState<RefundMode>(defaultMode(request, estimate))
+  const [amount, setAmount] = useState(
+    request?.kind === 'customer_cancellation' && estimate?.eligible && estimate.amount != null
+      ? Number(estimate.amount).toFixed(2)
+      : '',
+  )
   const [percent, setPercent] = useState('')
   const [guideShare, setGuideShare] = useState('')
   const [cancelBooking, setCancelBooking] = useState(
@@ -101,12 +109,18 @@ function DecisionForm({
     return d
   }
 
-  const { mutate, isPending } = useMutation({
-    mutationFn: () => (request
-      ? refundService.resolve(request.id, decision())
+  const canReject = !!request && CANCELLING_KINDS.includes(request.kind) && request.requested_by === 'customer'
+
+  const { mutate, isPending, variables: rejecting } = useMutation({
+    // Rejecting keeps the booking and refunds nothing; itin emails the customer.
+    mutationFn: (reject: boolean) => (request
+      ? refundService.resolve(
+        request.id,
+        reject ? { admin_notes: notes.trim(), cancel_booking: false } : decision(),
+      )
       : refundService.refundBooking(booking.id, decision())),
-    onSuccess: () => {
-      toast.success(refundNow > 0 ? `Refunded ${money(refundNow, currency)}` : 'Decision saved')
+    onSuccess: (_data, reject) => {
+      toast.success(reject ? 'Request rejected' : refundNow > 0 ? `Refunded ${money(refundNow, currency)}` : 'Decision saved')
       queryClient.invalidateQueries({ queryKey: ['refund-requests'] })
       queryClient.invalidateQueries({ queryKey: ['refund-booking', booking.id] })
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
@@ -154,6 +168,8 @@ function DecisionForm({
             <strong>Reason ({request.requested_by}):</strong> {request.reason}
           </Alert>
         )}
+
+        {estimate?.policy && <PolicySuggestion estimate={estimate} currency={currency} askedAt={request?.created_at} />}
 
         <div className="mb-3">
           <div className="small text-muted mb-1">Cancellation policy agreed at booking</div>
@@ -253,14 +269,56 @@ function DecisionForm({
       </Modal.Body>
       <Modal.Footer>
         <Button variant="outline-secondary" onClick={onDone}>Cancel</Button>
+        {canReject && (
+          <Button
+            variant="outline-danger"
+            className="me-auto order-first"
+            title="Keep the booking, refund nothing, and tell the customer"
+            disabled={notes.trim().length < 10 || isPending}
+            onClick={() => mutate(true)}
+          >
+            {isPending && rejecting ? <Spinner size="sm" /> : 'Reject request'}
+          </Button>
+        )}
         <Button
           variant={refundNow > 0 ? 'danger' : 'primary'}
           disabled={notes.trim().length < 10 || tooMuch || isPending || (mode === 'amount' && !amount) || (mode === 'percent' && !percent)}
-          onClick={() => mutate()}
+          onClick={() => mutate(false)}
         >
-          {isPending ? <Spinner size="sm" /> : refundNow > 0 ? `Refund ${money(refundNow, currency)}` : 'Save decision'}
+          {isPending && !rejecting ? <Spinner size="sm" /> : refundNow > 0 ? `Refund ${money(refundNow, currency)}` : 'Save decision'}
         </Button>
       </Modal.Footer>
     </>
+  )
+}
+
+// itin sends UTC without an offset; read it as UTC.
+const utc = (value: string) => new Date(/(Z|[+-]\d\d:?\d\d)$/i.test(value) ? value : `${value}Z`)
+
+// What the booking's refund policy says, judged when the customer asked.
+function PolicySuggestion({
+  estimate, currency, askedAt,
+}: { estimate: RefundEstimate; currency: string; askedAt?: string }) {
+  const deadline = estimate.deadline ? utc(estimate.deadline).toLocaleString() : null
+  let suggestion: string
+  if (estimate.eligible === true) {
+    suggestion = `Asked in time: suggested refund ${money(estimate.amount, currency)}.`
+  } else if (estimate.eligible === false) {
+    suggestion = estimate.policy === 'non_refundable'
+      ? 'The booking is non-refundable: no refund suggested.'
+      : 'Asked after the cutoff: no refund suggested.'
+  } else {
+    suggestion = 'No suggestion: decide from the policy text below.'
+  }
+  return (
+    <Alert variant={estimate.eligible ? 'success' : 'secondary'} className="small mb-3">
+      <div className="fw-semibold">{POLICY_LABEL[estimate.policy ?? ''] ?? estimate.policy}</div>
+      {deadline && <div>Full refund until {deadline}</div>}
+      <div>
+        {suggestion}
+        {askedAt && ` (as of ${utc(askedAt).toLocaleString()})`}
+      </div>
+      <div className="text-muted">A suggestion only. You decide the refund.</div>
+    </Alert>
   )
 }

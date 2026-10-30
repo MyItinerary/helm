@@ -240,6 +240,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
     multiDay,
     dated: form.schedule_type === 'one_off' || form.schedule_type === 'recurring',
     recurring: form.schedule_type === 'recurring',
+    adultsOnly: form.fit.age_policy === 'adults_only',
   }
   // A new experience's pricing, sent with it on Create.
   const [pricingDraft, setPricingDraft] = useState<PricingDraft>(newPricingDraft)
