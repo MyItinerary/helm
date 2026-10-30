@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import RefundDecisionModal from '@/components/refunds/RefundDecisionModal'
 import {
-  KIND_LABEL, money, refundService, type RefundRequest,
+  KIND_LABEL, money, OUTCOME, refundService, type RefundRequest,
 } from '@/services/refund.service'
 
 const KIND_VARIANT: Record<string, string> = {
@@ -90,6 +90,9 @@ export default function RefundsPage() {
                         <td className="small text-truncate" style={{ maxWidth: 260 }} title={r.reason ?? ''}>{r.reason}</td>
                       ) : (
                         <td>
+                          {r.outcome && (
+                            <Badge bg={OUTCOME[r.outcome].variant} className="mb-1">{OUTCOME[r.outcome].label}</Badge>
+                          )}
                           <div>{money(r.refund_amount, b?.currency)}</div>
                           <div className="small text-muted text-truncate" style={{ maxWidth: 260 }} title={r.admin_notes ?? ''}>{r.admin_notes}</div>
                         </td>
