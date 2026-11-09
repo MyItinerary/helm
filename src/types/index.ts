@@ -217,6 +217,10 @@ export interface Experience {
   free_cancellation_hours?: number | null
   // Admin responses: what the publish checklist still needs.
   missing_for_publish?: PublishChecklistItem[] | null
+  // Host listings go live straight away; null until an admin has checked it.
+  reviewed_at?: string | null
+  // Why an admin took the listing down.
+  review_note?: string | null
   created_at: string
   updated_at?: string
 }
