@@ -22,6 +22,19 @@ export interface RefundRecord {
   created_at: string
 }
 
+// What the booking's refund policy gives (itin's refund_estimate). eligible
+// and amount are null when the admin has to judge it (custom policy).
+export interface RefundEstimate {
+  policy?: 'full_refund_until' | 'non_refundable' | 'custom' | null
+  eligible?: boolean | null
+  amount?: Money | null
+  deadline?: string | null
+  paid: Money
+  already_refunded: Money
+}
+
+export type RequestOutcome = 'pending' | 'refunded' | 'approved' | 'rejected'
+
 export interface RefundBookingSummary {
   id: string
   status: string
@@ -37,6 +50,7 @@ export interface RefundBookingSummary {
   refunded_amount?: Money | null
   guide_earnings_amount?: Money | null
   cancellation_policy_snapshot?: string | null
+  refund_estimate?: RefundEstimate | null
   line_items: { kind: string; label: string; quantity: number; amount: Money }[]
   refunds: RefundRecord[]
 }
@@ -53,6 +67,7 @@ export interface RefundRequest {
   payment_reference?: string | null
   created_at: string
   resolved_at?: string | null
+  outcome?: RequestOutcome | null
   booking?: RefundBookingSummary | null
 }
 
@@ -89,6 +104,19 @@ export const KIND_LABEL: Record<RequestKind, string> = {
 
 // Requests whose resolution cancels the booking by default (matches itin).
 export const CANCELLING_KINDS: RequestKind[] = ['customer_cancellation', 'curator_cancellation', 'oversold']
+
+export const OUTCOME: Record<RequestOutcome, { label: string; variant: string }> = {
+  pending: { label: 'Pending', variant: 'secondary' },
+  refunded: { label: 'Refunded', variant: 'success' },
+  approved: { label: 'Cancelled, no refund', variant: 'warning' },
+  rejected: { label: 'Rejected', variant: 'danger' },
+}
+
+export const POLICY_LABEL: Record<string, string> = {
+  full_refund_until: 'Full refund until a cutoff',
+  non_refundable: 'Non-refundable',
+  custom: 'Custom (see the text)',
+}
 
 export const money = (amount: Money | null | undefined, currency?: string | null) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN' }).format(Number(amount ?? 0))
