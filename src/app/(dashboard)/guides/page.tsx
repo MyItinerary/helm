@@ -192,6 +192,28 @@ function EditGuideModal({
   )
 }
 
+/** What the applicant sent from the become-a-guide form. Older verifications have none of it. */
+function ApplicationDetails({ verification }: { verification?: Guide['verification'] }) {
+  if (!verification?.applicant_type) return null
+  const isBusiness = verification.applicant_type === 'business'
+  const rows: [string, string | null | undefined][] = [
+    ['Applying as', isBusiness ? 'A registered business' : 'An individual'],
+    ['Business name', isBusiness ? verification.business_name : null],
+    ['Full legal name', verification.full_name],
+    ['Date of birth', verification.date_of_birth ? new Date(`${verification.date_of_birth}T00:00:00`).toLocaleDateString() : null],
+    ['Phone', verification.phone_number],
+    ['City', verification.city],
+    ['Website', verification.website],
+  ]
+  return (
+    <>
+      {rows.filter(([, value]) => value).map(([label, value]) => (
+        <p key={label}><strong>{label}:</strong> {value}</p>
+      ))}
+    </>
+  )
+}
+
 function VerifyModal({
   guide,
   onClose,
@@ -221,6 +243,7 @@ function VerifyModal({
         {guide && (
           <>
             <p><strong>Guide:</strong> {guide.display_name || '(no name on file)'}</p>
+            <ApplicationDetails verification={guide.verification} />
             <p><strong>Document Type:</strong> {guide.verification?.id_document_type ?? '—'}</p>
             {guide.verification?.id_document_number && (
               <p><strong>Document Number:</strong> {guide.verification.id_document_number}</p>

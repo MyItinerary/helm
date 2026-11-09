@@ -92,6 +92,14 @@ export interface GuideVerification {
   guide_id: string
   id_document_type?: string
   id_document_number?: string
+  /** From the become-a-guide application on the website. */
+  applicant_type?: 'individual' | 'business' | null
+  full_name?: string | null
+  date_of_birth?: string | null
+  phone_number?: string | null
+  city?: string | null
+  website?: string | null
+  business_name?: string | null
   status: 'pending' | 'approved' | 'rejected'
   notes?: string
   submitted_at: string
