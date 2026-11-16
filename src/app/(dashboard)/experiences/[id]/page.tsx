@@ -5,7 +5,7 @@ import {
 } from 'react-bootstrap'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faArrowUpRightFromSquare, faCalendarDays, faCheck, faPencil, faXmark,
+  faCalendarDays, faCheck, faPencil, faXmark,
 } from '@fortawesome/free-solid-svg-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
@@ -13,9 +13,9 @@ import { useParams } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import ExperienceDetails from '@/components/experiences/ExperienceDetails'
+import PreviewButton from '@/components/experiences/PreviewButton'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { experienceService } from '@/services/experience.service'
-import { publicExperienceUrl } from '@/utils/site'
 
 function TakeDownModal({ show, saving, onClose, onConfirm }: {
   show: boolean
@@ -99,21 +99,7 @@ export default function ExperienceReviewPage() {
           </div>
         </div>
         <div className="d-flex flex-wrap gap-2">
-          {live ? (
-            <a
-              href={publicExperienceUrl(data.id)}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-sm btn-outline-primary"
-            >
-              <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="me-1" />
-              Preview as traveller
-            </a>
-          ) : (
-            <Button size="sm" variant="outline-primary" disabled title="Only a live listing has a public page">
-              Preview as traveller
-            </Button>
-          )}
+          <PreviewButton experienceId={data.id} />
           <Link href={`/experiences/${data.id}/edit`} className="btn btn-sm btn-outline-secondary">
             <FontAwesomeIcon icon={faPencil} className="me-1" />
             Edit
