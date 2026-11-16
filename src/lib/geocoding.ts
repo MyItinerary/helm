@@ -1,3 +1,14 @@
+import api from '@/lib/api'
+
+// Location search, from Google through itin (which holds the key). Picking
+// a suggestion looks up its city, country and pin; passing the same session
+// to both makes Google bill the typing and the pick as one search.
+
+export interface LocationSuggestion {
+  placeId: string
+  label: string
+}
+
 export interface GeocodeResult {
   label: string
   city?: string
@@ -6,43 +17,41 @@ export interface GeocodeResult {
   lon: number
 }
 
-interface NominatimAddress {
-  city?: string
-  town?: string
-  village?: string
-  country?: string
+interface PlaceSuggestion {
+  place_id: string
+  name: string
+  area: string | null
 }
 
-interface NominatimResult {
-  display_name: string
-  lat: string
-  lon: string
-  address?: NominatimAddress
+interface PlaceLocation {
+  place_id: string
+  latitude: number
+  longitude: number
+  address: string | null
+  city: string | null
+  country: string | null
 }
 
-// Swappable geocoding backend. Nominatim today (no key, ~1 req/sec usage
-// policy — fine for this low-volume admin tool); swap the implementation
-// for Google Places Autocomplete later without touching callers.
-export async function searchLocation(query: string): Promise<GeocodeResult[]> {
-  if (!query.trim()) return []
+export const newLocationSession = () => crypto.randomUUID()
 
-  const url = new URL('https://nominatim.openstreetmap.org/search')
-  url.searchParams.set('format', 'jsonv2')
-  url.searchParams.set('addressdetails', '1')
-  url.searchParams.set('limit', '5')
-  url.searchParams.set('q', query)
-
-  const response = await fetch(url.toString(), {
-    headers: { Accept: 'application/json' },
+export async function searchLocation(query: string, session: string): Promise<LocationSuggestion[]> {
+  // itin needs three letters before it asks Google.
+  if (query.trim().length < 3) return []
+  const { data } = await api.get<PlaceSuggestion[]>('/admin/geo/places/autocomplete', {
+    params: { q: query.trim(), session },
   })
-  if (!response.ok) throw new Error('Location search failed')
+  return data.map((p) => ({ placeId: p.place_id, label: p.area ? `${p.name}, ${p.area}` : p.name }))
+}
 
-  const results = (await response.json()) as NominatimResult[]
-  return results.map((r) => ({
-    label: r.display_name,
-    city: r.address?.city ?? r.address?.town ?? r.address?.village,
-    country: r.address?.country,
-    lat: Number(r.lat),
-    lon: Number(r.lon),
-  }))
+export async function placeDetails(suggestion: LocationSuggestion, session: string): Promise<GeocodeResult> {
+  const { data } = await api.get<PlaceLocation>(`/admin/geo/places/${encodeURIComponent(suggestion.placeId)}`, {
+    params: { session },
+  })
+  return {
+    label: suggestion.label,
+    city: data.city ?? undefined,
+    country: data.country ?? undefined,
+    lat: data.latitude,
+    lon: data.longitude,
+  }
 }

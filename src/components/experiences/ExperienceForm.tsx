@@ -9,7 +9,9 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { experienceService, orphanedBookings } from '@/services/experience.service'
 import { apiErrorDetail } from '@/services/pricing.service'
-import { searchLocation, type GeocodeResult } from '@/lib/geocoding'
+import {
+  newLocationSession, placeDetails, searchLocation, type LocationSuggestion,
+} from '@/lib/geocoding'
 import { useCategoryOptions } from '@/hooks/use-category-options'
 import type { Experience, ItineraryStep } from '@/types'
 import {
@@ -441,9 +443,11 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
   const saveRecurrence = (next: RecurrenceFields) => setForm((f) => ({ ...f, ...next }))
 
   const [locationQuery, setLocationQuery] = useState('')
-  const [locationResults, setLocationResults] = useState<GeocodeResult[]>([])
+  const [locationResults, setLocationResults] = useState<LocationSuggestion[]>([])
   const [showLocationResults, setShowLocationResults] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // One Google search session per pick, so the typing and the pick are billed together.
+  const locationSession = useRef(newLocationSession())
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -452,7 +456,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
       return undefined
     }
     debounceRef.current = setTimeout(() => {
-      searchLocation(locationQuery)
+      searchLocation(locationQuery, locationSession.current)
         .then((results) => {
           setLocationResults(results)
           setShowLocationResults(true)
@@ -464,16 +468,20 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
     }
   }, [locationQuery])
 
-  const selectLocation = (result: GeocodeResult) => {
-    setForm((f) => ({
-      ...f,
-      city: result.city ?? f.city,
-      country: result.country ?? f.country,
-      latitude: String(result.lat),
-      longitude: String(result.lon),
-    }))
-    setLocationQuery(result.label)
+  const selectLocation = (suggestion: LocationSuggestion) => {
+    setLocationQuery(suggestion.label)
     setShowLocationResults(false)
+    const session = locationSession.current
+    locationSession.current = newLocationSession()
+    placeDetails(suggestion, session)
+      .then((result) => setForm((f) => ({
+        ...f,
+        city: result.city ?? f.city,
+        country: result.country ?? f.country,
+        latitude: String(result.lat),
+        longitude: String(result.lon),
+      })))
+      .catch(() => toast.error("Couldn't look up that place. Pick it again or fill in the fields below."))
   }
 
   const [isUploadingImages, setIsUploadingImages] = useState(false)
@@ -538,7 +546,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
               <ListGroup className="position-absolute w-100 shadow-sm" style={{ zIndex: 1000 }}>
                 {locationResults.map((result) => (
                   <ListGroup.Item
-                    key={`${result.lat},${result.lon}`}
+                    key={result.placeId}
                     action
                     onMouseDown={() => selectLocation(result)}
                   >
@@ -547,7 +555,7 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
                 ))}
               </ListGroup>
             )}
-            <Form.Text className="text-muted">Powered by OpenStreetMap. City/country/lat/long below stay editable if you need to correct them.</Form.Text>
+            <Form.Text className="text-muted">Powered by Google. City/country/lat/long below stay editable if you need to correct them.</Form.Text>
           </Form.Group>
           <Row>
             <Col md={6}>
