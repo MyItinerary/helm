@@ -15,6 +15,12 @@ export const experienceService = {
     .post<Experience>(`/admin/experiences/${id}/review`, { decision, note })
     .then((r) => r.data),
 
+  // A 30-minute token that opens the listing, live or not, on the website's
+  // preview page.
+  previewToken: (id: string) => api
+    .post<{ token: string; expires_at: string }>(`/admin/experiences/${id}/preview-token`)
+    .then((r) => r.data.token),
+
   create: (data: Record<string, unknown>) => api.post<Experience>('/admin/experiences', data).then((r) => r.data),
 
   // confirm: save even if upcoming bookings lose their session (the API

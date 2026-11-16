@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { experienceService } from '@/services/experience.service'
 import ExperienceDetails from '@/components/experiences/ExperienceDetails'
+import PreviewButton from '@/components/experiences/PreviewButton'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { describeMissing, missingFromError } from '@/utils/publish'
 import { formatPriceFrom } from '@/utils/schedule'
@@ -186,6 +187,7 @@ export default function ExperiencesPage() {
                         <Link href={`/experiences/${exp.id}/edit`} className="btn btn-sm btn-outline-secondary" title="Edit">
                           <FontAwesomeIcon icon={faPencil} />
                         </Link>
+                        <PreviewButton experienceId={exp.id} compact />
                         <Link href={`/experiences/${exp.id}/sessions`} className="btn btn-sm btn-outline-secondary" title="Sessions and seats">
                           <FontAwesomeIcon icon={faCalendarDays} />
                         </Link>

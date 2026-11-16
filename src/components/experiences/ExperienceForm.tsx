@@ -26,6 +26,7 @@ import ExperiencePricingManager, {
   PricingDraftEditor, newPricingDraft, pricingDraftPayload, pricingDraftProblem, type PricingContext, type PricingDraft,
 } from './ExperiencePricingManager'
 import ExperienceImagesField from './ExperienceImagesField'
+import PreviewButton from './PreviewButton'
 import InterestTagsField from './InterestTagsField'
 import FitLogisticsSection, {
   fitLogisticsPayload, fitLogisticsProblem, toFitLogistics, type FitLogistics,
@@ -225,6 +226,9 @@ interface ExperienceFormProps {
 export default function ExperienceForm({ mode, experienceId, initialValues }: ExperienceFormProps) {
   const router = useRouter()
   const [form, setForm] = useState<FormState>(() => toFormState(initialValues))
+  // What was last saved, to tell whether the preview is out of date.
+  const [saved] = useState(() => JSON.stringify(toFormState(initialValues)))
+  const dirty = JSON.stringify(form) !== saved
   const queryClient = useQueryClient()
   const { byType: categoriesByType, isLoading: categoriesLoading } = useCategoryOptions()
   const socialStyleOptions = (categoriesByType.social_style ?? []).map((c) => ({ id: c.slug, label: c.text }))
@@ -479,6 +483,12 @@ export default function ExperienceForm({ mode, experienceId, initialValues }: Ex
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h4 className="mb-0">{mode === 'edit' ? 'Edit Experience' : 'Create Experience'}</h4>
+        {mode === 'edit' && experienceId && (
+          <div className="d-flex align-items-center gap-2">
+            {dirty && <span className="small text-muted">The preview shows the last saved version.</span>}
+            <PreviewButton experienceId={experienceId} />
+          </div>
+        )}
       </div>
 
       <NeedsDetailsPanel missing={missingDetails} live={initialValues?.status === 'ACTIVE'} />
