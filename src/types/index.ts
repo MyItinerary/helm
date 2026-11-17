@@ -70,6 +70,7 @@ export interface UserDetail extends User {
 export interface Guide {
   id: string
   display_name: string
+  email?: string | null
   headline?: string
   about?: string
   city?: string
