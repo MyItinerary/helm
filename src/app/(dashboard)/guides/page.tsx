@@ -320,7 +320,7 @@ export default function GuidesPage() {
                   <div className="input-group">
                     <span className="input-group-text"><FontAwesomeIcon icon={faSearch} /></span>
                     <Form.Control
-                      placeholder="Search..."
+                      placeholder="Search name or email..."
                       value={search}
                       onChange={(e) => { setSearch(e.target.value); setPage(1) }}
                     />
@@ -336,6 +336,7 @@ export default function GuidesPage() {
                   <thead className="table-light">
                     <tr>
                       <th>Name</th>
+                      <th>Email</th>
                       <th>Location</th>
                       <th>Rating</th>
                       <th>Verification</th>
@@ -345,7 +346,7 @@ export default function GuidesPage() {
                   </thead>
                   <tbody>
                     {guides?.items.length === 0 && (
-                      <tr><td colSpan={6} className="text-center text-muted py-4">No guides found</td></tr>
+                      <tr><td colSpan={7} className="text-center text-muted py-4">No guides found</td></tr>
                     )}
                     {guides?.items.map((g) => (
                       <tr key={g.id} className="align-middle">
@@ -353,6 +354,7 @@ export default function GuidesPage() {
                           <div className="fw-semibold">{g.display_name || '(no name on file)'}</div>
                           {g.headline && <div className="small text-muted">{g.headline}</div>}
                         </td>
+                        <td className="small">{g.email || '—'}</td>
                         <td>{[g.city, g.country].filter(Boolean).join(', ') || '—'}</td>
                         <td>{g.rating_avg ? `${g.rating_avg.toFixed(1)} ★ (${g.rating_count})` : '—'}</td>
                         <td><StatusBadge status={g.verification_level} /></td>
@@ -404,6 +406,7 @@ export default function GuidesPage() {
                 <thead className="table-light">
                   <tr>
                     <th>Guide</th>
+                    <th>Email</th>
                     <th>Document Type</th>
                     <th>Submitted</th>
                     <th>Status</th>
@@ -412,7 +415,7 @@ export default function GuidesPage() {
                 </thead>
                 <tbody>
                   {(!unverified || unverified.length === 0) && (
-                    <tr><td colSpan={5} className="text-center text-muted py-4">No pending verifications</td></tr>
+                    <tr><td colSpan={6} className="text-center text-muted py-4">No pending verifications</td></tr>
                   )}
                   {unverified?.map((g) => (
                     <tr key={g.id} className="align-middle">
@@ -420,6 +423,7 @@ export default function GuidesPage() {
                         <div className="fw-semibold">{g.display_name || '(no name on file)'}</div>
                         <div className="font-monospace small text-muted">{g.id}</div>
                       </td>
+                      <td className="small">{g.email || '—'}</td>
                       <td>{g.verification?.id_document_type ?? '—'}</td>
                       <td className="text-muted small">
                         {g.verification ? new Date(g.verification.submitted_at).toLocaleDateString() : '—'}
